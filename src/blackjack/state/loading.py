@@ -14,8 +14,6 @@ import pygame as pg
 import os
 from math import floor
 
-print(str(impresources.files("blackjack").joinpath("fonts/KozGoPro-Bold.otf")))
-
 
 class AssetLoader:
     def __init__(self) -> None:
@@ -23,8 +21,6 @@ class AssetLoader:
 
         self.to_load = iter(all_assets)
         self.expected_files = len(all_assets)
-
-        print("[DEBUG]: EXPECTED NO OF FILES", self.expected_files)
 
     @staticmethod
     def all_assets() -> List[str]:

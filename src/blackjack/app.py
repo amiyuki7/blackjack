@@ -2,19 +2,26 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Type
 
 
-import enum, sys, pygame as pg
+import enum, os, sys, pygame as pg
 
 from pygame.locals import *
 from abc import ABC, abstractmethod
 
 from loguru import logger
 
-logger.remove(0)
-logger.add(
-    "log/{time:YYYY-MMM-D@H:mm:ss}.log",
-    format="{time:HH:mm:ss} | {level} | {file}:{function}:{line} -> {message}",
-    level="TRACE",
-)
+# Setup logging
+ENABLE_LOGGING = os.environ.get("BLACKJACK_ENABLE_LOGGING", "no")
+
+if ENABLE_LOGGING == "yes":
+    logger.remove(0)
+    logger.add(
+        "log/{time:YYYY-MMM-D@H:mm:ss}.log",
+        format="{time:HH:mm:ss} | {level} | {file}:{function}:{line} -> {message}",
+        level="TRACE",
+    )
+else:
+    logger.disable("blackjack")
+
 
 pg.init()
 
