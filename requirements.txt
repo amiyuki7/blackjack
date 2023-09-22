@@ -1,0 +1,16 @@
+black==23.9.1
+cachetools==5.3.1
+chardet==5.2.0
+click==8.1.7
+colorama==0.4.6
+distlib==0.3.7
+filelock==3.12.2
+mypy-extensions==1.0.0
+packaging==23.1
+pathspec==0.11.2
+platformdirs==3.10.0
+pluggy==1.2.0
+pygame==2.5.1
+pyproject-api==1.5.4
+tox==4.10.0
+virtualenv==20.24.3
