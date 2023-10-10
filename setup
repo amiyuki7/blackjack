@@ -1,11 +1,11 @@
-#!/bin/sh
+#!/usr/bin/env bash
 
 # You should be using pyenv and have a valid version in ./.python-version
 
 if [[ ! -d "./venv/" ]]; then
 	python -m venv venv
 	source venv/bin/activate
-	pip install pyright black flit
+	pip install pyright black flit pytest tox mypy
 fi
 
 source ./venv/bin/activate

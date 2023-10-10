@@ -35,7 +35,7 @@ class AssetLoader:
         path = next(self.to_load, None)
 
         if path is None:
-            return
+            return None
 
         filename = os.path.basename(path)
         key = os.path.splitext(filename)[0]

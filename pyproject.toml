@@ -24,3 +24,16 @@ name = "blackjack"
 [tool.black]
 line-length = 100
 target-version = ["py311"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src/blackjack"]
+show_error_context = true
+pretty = true
+allow_redefinition = true
+disallow_subclassing_any = true
+strict_equality = true
+warn_redundant_casts = true
+warn_unused_configs = true
+warn_unused_ignores = true
+warn_return_any = true
