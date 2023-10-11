@@ -37,3 +37,7 @@ warn_redundant_casts = true
 warn_unused_configs = true
 warn_unused_ignores = true
 warn_return_any = true
+
+[tool.pyright]
+include = ["src", "tests"]
+venv = "venv"
