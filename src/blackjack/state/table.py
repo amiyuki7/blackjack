@@ -52,6 +52,13 @@ class Card(Drawable):
 
     @override
     def draw(self, ctx: App) -> None:
+        if self.image_key == "0cardback":
+            card = ctx.images[self.image_key]
+            card = pg.transform.scale(card, (card.get_width() * 0.14, card.get_height() * 0.14))
+            blit_rect = pg.rect.Rect(self.pos.x, self.pos.y, card.get_width(), card.get_height())
+            ctx.display.blit(card, blit_rect)
+            return
+
         card_front = ctx.images["0cardfront"]
         card_front = pg.transform.scale(card_front, (card_front.get_width() * 0.14, card_front.get_height() * 0.14))
 
@@ -167,10 +174,22 @@ class Table(State):
             case GamePhase.Initial:
                 # Dummy phase for now, but implemented like this so it's easier to write any events
                 # that could happen before the deal phase in the future
-                top_card = self.deck.poptop()
-                top_card.pos = Vec2(500, 100)
+                deck_zone = self.ctx.zones["deck"].topleft
 
-                self.movables.append(Movable(top_card, dest=Vec2(50, 600), speed=1000))
+                burn_card = self.deck.poptop()
+                burn_card.pos = Vec2(deck_zone[0], deck_zone[1])
+                burn_card.image_key = "0cardback"
+                burn_zone = self.ctx.zones["burn"].topleft
+                self.movables.append(Movable(burn_card, dest=Vec2(burn_zone[0], burn_zone[1]), speed=2000))
+
+                # for i in range(0, 4):
+                #     top_card = self.deck.poptop()
+                #     deck_zone = self.ctx.zones["deck"].topleft
+                #     top_card.pos = Vec2(deck_zone[0], deck_zone[1])
+                #
+                #     zone_hand_1 = self.ctx.zones[f"bl_{i}"].topleft
+                #     self.movables.append(Movable(top_card, dest=Vec2(zone_hand_1[0], zone_hand_1[1]), speed=2000))
+
                 self.game_phase = GamePhase.Deal
                 pass
             case GamePhase.Deal:
