@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+LAST_FILE=$(ls -lt ./log/ | head -n 2 | tail -n 1)
+read -ra segments <<< $LAST_FILE
+
+LAST_IDX=$((${#segments[@]} - 1))
+echo ${segments[$LAST_IDX]}
+
+bat "log/"${segments[$LAST_IDX]}
