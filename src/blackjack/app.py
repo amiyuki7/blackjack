@@ -1,13 +1,13 @@
 from __future__ import annotations
 from typing import Dict, List, Optional, Sized, Type
 
-import enum, os, sys, math, pygame as pg
+import os, sys, pygame as pg
 
-from pygame.locals import *
 from abc import ABC, abstractmethod
 
 from loguru import logger
 from .util import Vec2
+from .ui import UIState, UIObject, FadeOverlay
 
 # Setup logging
 ENABLE_LOGGING = os.environ.get("BLACKJACK_ENABLE_LOGGING", "no")
@@ -24,39 +24,6 @@ else:
 
 
 pg.init()
-
-
-# class Suit(enum.Enum):
-#     Diamond = enum.auto()
-#     Club = enum.auto()
-#     Heart = enum.auto()
-#     Spade = enum.auto()
-#
-#
-# class Card:
-#     def __init__(self, value: Optional[int], suit: Suit) -> None:
-#         self.texture = ""
-#         self.value = value
-#         self.suit = suit
-#         # check if value is none then decide
-#         self.is_ace: bool = False
-#
-#
-# class Hand:
-#     def __init__(self) -> None:
-#         self.cards: List[Card] = []
-#
-#     def calculate_value(self) -> int:
-#         return 0
-#
-#
-# class Player:
-#     def __init__(self) -> None:
-#         self.hand = Hand()
-#
-#
-# class Dealer(Player):
-#     pass
 
 
 class Drawable(ABC):
@@ -93,6 +60,7 @@ class State(ABC):
 class App:
     def __init__(self, state: Type[State]) -> None:
         self.state = state(self)
+        self.ui_state = UIState.Normal
         self.clock = pg.time.Clock()
         self.dt: float
 
@@ -106,20 +74,37 @@ class App:
         keys: ["deck", "burn", "hand_bl_<d>", "hand_br_<d>", "hand_tl_<d>", "hand_tr_<d>", "stat_<d>", "bet_<d>"]
         """
 
+        self.ui_objects: List[UIObject] = []
+        self.ui_objects.append(FadeOverlay(self, UIState.Bet))
+
     def update(self) -> None:
         self.state.update()
 
         for event in pg.event.get():
-            if event.type == QUIT:
+            if event.type == pg.QUIT:
                 pg.quit()
                 sys.exit()
             if event.type == pg.KEYDOWN:
-                if event.key == pg.K_w:
-                    logger.info("yay")
+                match self.ui_state:
+                    case UIState.Normal:
+                        if event.key == pg.K_w:
+                            logger.info("yay")
+                    case UIState.Bet:
+                        pass
+
+        # Only update UI Objects during the correct UI State
+        for obj in self.ui_objects:
+            if obj.target_state == self.ui_state:
+                obj.update()
 
     def render(self) -> None:
         self.display.fill((0, 0, 0))
         self.state.render()
+
+        # Overlayed UI renders
+        for obj in self.ui_objects:
+            if obj.target_state == self.ui_state:
+                obj.render()
 
     def run(self) -> None:
         while 1:
