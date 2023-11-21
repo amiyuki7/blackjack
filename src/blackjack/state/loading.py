@@ -90,10 +90,10 @@ class Loading(State):
                 stat_rect = pg.rect.Rect(zone_rect.x, zone_rect.bottom, zone_width, zone_width // 2 * 3 / 5)
                 bet_rect = pg.rect.Rect(zone_rect.x, stat_rect.bottom, zone_width, zone_width // 2 * 2 / 5)
 
-                self.ctx.zones[f"tl_{idx}"] = zone_tl
-                self.ctx.zones[f"tr_{idx}"] = zone_tr
-                self.ctx.zones[f"bl_{idx}"] = zone_bl
-                self.ctx.zones[f"br_{idx}"] = zone_br
+                self.ctx.zones[f"hand_tl_{idx}"] = zone_tl
+                self.ctx.zones[f"hand_tr_{idx}"] = zone_tr
+                self.ctx.zones[f"hand_bl_{idx}"] = zone_bl
+                self.ctx.zones[f"hand_br_{idx}"] = zone_br
                 self.ctx.zones[f"stat_{idx}"] = stat_rect
                 self.ctx.zones[f"bet_{idx}"] = bet_rect
 

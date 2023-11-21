@@ -207,44 +207,17 @@ class Table(State):
         self.ctx.display.fill((255, 0, 0))
         screen_w, screen_h = self.ctx.display.get_width(), self.ctx.display.get_height()
 
-        # Draw the deck of cards
-        card_front = pg.image.load(str(impresources.files("blackjack").joinpath("assets/0cardfront.png")))
-        card_front = pg.transform.scale(card_front, (card_front.get_width() * 0.14, card_front.get_height() * 0.14))
-
-        padding = card_front.get_width() // 4
-
-        deck_pos = pg.rect.Rect(
-            screen_w - card_front.get_width() - padding, padding, card_front.get_width(), card_front.get_height()
-        )
-        self.ctx.display.blit(card_front, deck_pos)
-
-        # Draw the burned pile
-        burned_pos = pg.rect.Rect(padding, padding, card_front.get_width(), card_front.get_height())
-        self.ctx.display.blit(card_front, burned_pos)
-
-        # Draw rectangles for every zone
-        n_zones = 4
-        zone_width = screen_w / 4.5
-
-        for point in get_evenly_spaced_points(screen_w, zone_width, n_zones):
-            zone_rect = pg.rect.Rect(point, screen_h - 1.5 * zone_width, zone_width, zone_width)
-            # pg.draw.rect(self.ctx.display, (0, 255, 0), zone_rect)
-
-            # Draw four partitions of the zone for four possible hands
-            zone_tl = pg.rect.Rect(zone_rect.x, zone_rect.top, zone_width // 2, zone_width // 2)
-            zone_tr = pg.rect.Rect(zone_tl.right, zone_rect.top, zone_width // 2, zone_width // 2)
-            zone_bl = pg.rect.Rect(zone_rect.x, zone_tl.bottom, zone_width // 2, zone_width // 2)
-            zone_br = pg.rect.Rect(zone_bl.right, zone_tr.bottom, zone_width // 2, zone_width // 2)
-            pg.draw.rect(self.ctx.display, (50, 50, 50), zone_tl)
-            pg.draw.rect(self.ctx.display, (100, 100, 100), zone_tr)
-            pg.draw.rect(self.ctx.display, (150, 150, 150), zone_bl)
-            pg.draw.rect(self.ctx.display, (0, 0, 255), zone_br)
-
-            stat_rect = pg.rect.Rect(zone_rect.x, zone_rect.bottom, zone_width, zone_width // 2 * 3 / 5)
-            pg.draw.rect(self.ctx.display, (0, 130, 0), stat_rect)
-
-            bet_rect = pg.rect.Rect(zone_rect.x, stat_rect.bottom, zone_width, zone_width // 2 * 2 / 5)
-            pg.draw.rect(self.ctx.display, (0, 50, 0), bet_rect)
+        for zone_name, rect in self.ctx.zones.items():
+            if "hand" in zone_name:
+                pg.draw.rect(self.ctx.display, (80, 140, 60), rect)
+            if "stat" in zone_name:
+                pg.draw.rect(self.ctx.display, (80, 80, 80), rect)
+            if "bet" in zone_name:
+                pg.draw.rect(self.ctx.display, (30, 30, 30), rect)
+            if zone_name == "deck":
+                card = pg.image.load(str(impresources.files("blackjack").joinpath("assets/0cardback.png")))
+                card = pg.transform.scale(card, (card.get_width() * 0.14, card.get_height() * 0.14))
+                self.ctx.display.blit(card, rect)
 
         # Draw the stack of cards in each hand to each corresponding zone / partitioned zone
         # Generalise the spacing for a diagonal vector

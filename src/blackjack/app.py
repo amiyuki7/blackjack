@@ -101,6 +101,10 @@ class App:
 
         self.images: Dict[str, pg.Surface] = {}
         self.zones: Dict[str, pg.Rect] = {}
+        """
+        <d> = 0|1|2|3
+        keys: ["deck", "burn", "hand_bl_<d>", "hand_br_<d>", "hand_tl_<d>", "hand_tr_<d>", "stat_<d>", "bet_<d>"]
+        """
 
     def update(self) -> None:
         self.state.update()
