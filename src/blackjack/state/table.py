@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from ..app import App
 
 from ..app import Drawable, State
+from ..ui import UIState
 from ..util import Vec2, get_evenly_spaced_points
 
 from enum import Enum, auto
@@ -121,6 +122,7 @@ class Deck:
 
 class GamePhase(Enum):
     Initial = auto()
+    Bet = auto()
     Deal = auto()
     Play = auto()
     EndRound = auto()
@@ -167,6 +169,8 @@ class Table(State):
         self.movables: List[Movable] = []
         self.game_objects: List[Drawable] = []
 
+        self.deal_counter: int = 0
+
         super().__init__(ctx)
 
     def update(self) -> None:
@@ -182,18 +186,23 @@ class Table(State):
                 burn_zone = self.ctx.zones["burn"].topleft
                 self.movables.append(Movable(burn_card, dest=Vec2(burn_zone[0], burn_zone[1]), speed=2000))
 
-                # for i in range(0, 4):
-                #     top_card = self.deck.poptop()
-                #     deck_zone = self.ctx.zones["deck"].topleft
-                #     top_card.pos = Vec2(deck_zone[0], deck_zone[1])
-                #
-                #     zone_hand_1 = self.ctx.zones[f"bl_{i}"].topleft
-                #     self.movables.append(Movable(top_card, dest=Vec2(zone_hand_1[0], zone_hand_1[1]), speed=2000))
-
-                self.game_phase = GamePhase.Deal
+                self.game_phase = GamePhase.Bet
+            case GamePhase.Bet:
+                self.ctx.ui_state = UIState.Bet
+                # min bet: 10
+                # max bet: 1000
                 pass
             case GamePhase.Deal:
-                pass
+                if self.deal_counter < 3 and len(self.movables) == 0:
+                    for i in range(0, 4):
+                        top_card = self.deck.poptop()
+                        deck_zone = self.ctx.zones["deck"].topleft
+                        top_card.pos = Vec2(deck_zone[0], deck_zone[1])
+
+                        zone = self.ctx.zones[f"hand_bl_{i}"].topleft
+                        zone = (zone[0] + self.deal_counter * 25, zone[1] + self.deal_counter * 25)
+                        self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+                    self.deal_counter += 1
             case _:
                 pass
 
