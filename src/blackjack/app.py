@@ -6,6 +6,8 @@ import os, sys, pygame as pg
 from abc import ABC, abstractmethod
 
 from loguru import logger
+
+from blackjack.ui.bet_box import BetBox
 from .util import Vec2
 from .ui import UIState, UIObject, FadeOverlay
 
@@ -76,6 +78,7 @@ class App:
 
         self.ui_objects: List[UIObject] = []
         self.ui_objects.append(FadeOverlay(self, UIState.Bet))
+        self.ui_objects.append(BetBox(self, UIState.Bet))
 
     def update(self) -> None:
         self.state.update()
@@ -87,10 +90,10 @@ class App:
             if event.type == pg.KEYDOWN:
                 match self.ui_state:
                     case UIState.Normal:
-                        if event.key == pg.K_w:
-                            logger.info("yay")
-                    case UIState.Bet:
                         pass
+                    case UIState.Bet:
+                        # Filter out the bet box object
+                        [u for u in self.ui_objects if type(u) == BetBox][0].handle_key_update(event)
 
         # Only update UI Objects during the correct UI State
         for obj in self.ui_objects:
