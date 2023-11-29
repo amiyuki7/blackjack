@@ -96,6 +96,12 @@ class Loading(State):
                 self.ctx.zones[f"stat_{idx}"] = stat_rect
                 self.ctx.zones[f"bet_{idx}"] = bet_rect
 
+            # Dealer zone
+            dealer_zone = self.ctx.zones["hand_tl_0"].copy()
+            dealer_zone.center = self.ctx.display.get_rect().center
+            dealer_zone.centery -= self.ctx.display.get_rect().height // 5
+            self.ctx.zones["hand_dealer"] = dealer_zone
+
     def render(self) -> None:
         loaded = len(self.ctx.images) / self.loader.expected_files
 

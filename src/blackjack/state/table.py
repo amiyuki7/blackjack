@@ -232,3 +232,15 @@ class Table(State):
 
         for game_object in self.game_objects:
             game_object.draw(self.ctx)
+
+        if self.game_phase in [GamePhase.Bet, GamePhase.Deal, GamePhase.Play]:
+            # Draw the bet text
+            for player in self.players:
+                id = player.id
+                if id == -1:
+                    # Dealer
+                    continue
+
+                bet_text = self.stats_font.render(f"Bet: ${player.round_bet}", True, (255, 255, 255))
+                rect = self.ctx.zones[f"bet_{id}"]
+                self.ctx.display.blit(bet_text, (rect.left + rect.height // 4, rect.top + rect.height // 4))
