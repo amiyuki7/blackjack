@@ -38,7 +38,7 @@ class Bot(Player):
     def decide_bet(self) -> None:
         # Not going to add heuristics for betting - just random value
         # Check blackjack.ui.bet_box for min/max bet values
-        min_bet, max_bet = 100, 10000
+        min_bet, max_bet = 100, 5000
         self.round_bet = random.randrange(min_bet, max_bet + 1)
 
 
@@ -209,6 +209,8 @@ class Table(State):
             str(impresources.files("blackjack").joinpath("fonts/KozGoPro-Light.otf")), ctx.zones["bet_0"].height // 2
         )
 
+        self.DEBUG_FORCE_DEALER_BLACKJACK = False
+
         super().__init__(ctx)
 
     def filter_players(self, condition: Callable[[Player], bool]) -> List[Player]:
@@ -244,7 +246,14 @@ class Table(State):
                     for i in range(-1, 4):
                         target = self.filter_players(lambda player: player.id == i)[0]
 
-                        top_card = self.deck.poptop()
+                        if i == -1 and self.DEBUG_FORCE_DEALER_BLACKJACK:
+                            if self.deal_counter == 0:
+                                top_card = Card(10, suit="spades", image_key="queen_of_spades")
+                            else:
+                                top_card = Card(-1, suit="hearts", image_key="ace_of_hearts")
+                        else:
+                            top_card = self.deck.poptop()
+
                         top_card.pos = Vec2(*self.ctx.zones["deck"].topleft)
 
                         # Second card for the dealer is face down
