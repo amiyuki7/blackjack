@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Callable, List
 from typing_extensions import override
 
 if TYPE_CHECKING:
@@ -19,14 +19,27 @@ from queue import LifoQueue
 
 class Player:
     def __init__(self, id: int) -> None:
-        self.hands: List[Hand] = []
+        self.hands: List[Hand] = [Hand()]
         self.id = id
         self.balance = 100000
+
+        self.round_bet = 0
+
+        self.current_hand = 0
+
+    def add_card(self, card: Card) -> None:
+        self.hands[self.current_hand].cards.append(card)
 
 
 class Bot(Player):
     def __init__(self, id: int) -> None:
         super().__init__(id)
+
+    def decide_bet(self) -> None:
+        # Not going to add heuristics for betting - just random value
+        # Check blackjack.ui.bet_box for min/max bet values
+        min_bet, max_bet = 100, 10000
+        self.round_bet = random.randrange(min_bet, max_bet + 1)
 
 
 class Dealer(Player):
@@ -47,11 +60,12 @@ class Card(Drawable):
         ```
         """
         self.is_ace = value == -1
+        self.is_facedown = False
 
     @override
     def draw(self, ctx: App) -> None:
-        if self.image_key == "0cardback":
-            card = ctx.images[self.image_key]
+        if self.is_facedown or self.image_key == "0cardback":
+            card = ctx.images["0cardback"]
             card = pg.transform.scale(card, (card.get_width() * 0.14, card.get_height() * 0.14))
             blit_rect = pg.rect.Rect(self.pos.x, self.pos.y, card.get_width(), card.get_height())
             ctx.display.blit(card, blit_rect)
@@ -74,8 +88,8 @@ class Card(Drawable):
 
 
 class Hand:
-    def __init__(self, cards: List[Card]) -> None:
-        self.cards = cards
+    def __init__(self) -> None:
+        self.cards: List[Card] = []
 
 
 class Deck:
@@ -156,7 +170,7 @@ class Movable:
 class Table(State):
     def __init__(self, ctx: App) -> None:
         # Dealer will always have the id 0, and the player will always have the id 1
-        self.players = [Dealer(0), Player(1), Bot(2), Bot(3), Bot(4)]
+        self.players: List[Player] = [Dealer(-1), Player(0), Bot(1), Bot(2), Bot(3)]
         self.deck = Deck(n_decks=6)
         self.deck.new_shuffled_deck()
         self.game_phase: GamePhase = GamePhase.Initial
@@ -164,9 +178,15 @@ class Table(State):
         self.game_objects: List[Drawable] = []
 
         self.deal_counter: int = 0
-        self.player_bet = 0
+
+        self.stats_font = pg.font.Font(
+            str(impresources.files("blackjack").joinpath("fonts/KozGoPro-Light.otf")), ctx.zones["bet_0"].height // 2
+        )
 
         super().__init__(ctx)
+
+    def filter_players(self, condition: Callable[[Player], bool]) -> List[Player]:
+        return [player for player in self.players if condition(player)]
 
     def update(self) -> None:
         match self.game_phase:
@@ -185,20 +205,39 @@ class Table(State):
             case GamePhase.Bet:
                 self.ctx.ui_state = UIState.Bet
 
-                if self.player_bet != 0:
+                player = self.filter_players(lambda player: type(player) == Player)[0]
+                if player.round_bet != 0:
                     self.game_phase = GamePhase.Deal
                     self.ctx.ui_state = UIState.Normal
+
+                    # This will only run once
+                    [x.decide_bet() for x in self.players if type(x) == Bot]
+
             case GamePhase.Deal:
                 if self.deal_counter < 2 and len(self.movables) == 0:
-                    for i in range(0, 4):
-                        top_card = self.deck.poptop()
-                        deck_zone = self.ctx.zones["deck"].topleft
-                        top_card.pos = Vec2(deck_zone[0], deck_zone[1])
+                    for i in range(-1, 4):
+                        target = self.filter_players(lambda player: player.id == i)[0]
 
-                        zone = self.ctx.zones[f"hand_bl_{i}"].topleft
+                        top_card = self.deck.poptop()
+                        top_card.pos = Vec2(*self.ctx.zones["deck"].topleft)
+
+                        # Second card for the dealer is face down
+                        if self.deal_counter == 1 and i == -1:
+                            top_card.is_facedown = True
+
+                        target.add_card(top_card)
+
+                        zone = self.ctx.zones[f"hand_{'dealer' if i == -1 else f'bl_{i}'}"].topleft
                         zone = (zone[0] + self.deal_counter * 25, zone[1] + self.deal_counter * 25)
                         self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+
                     self.deal_counter += 1
+            case GamePhase.Play:
+                pass
+            case GamePhase.EndRound:
+                # Reset bets to 0
+                for player in self.players:
+                    player.round_bet = 0
             case _:
                 pass
 

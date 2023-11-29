@@ -7,9 +7,8 @@ from abc import ABC, abstractmethod
 
 from loguru import logger
 
-from blackjack.ui.bet_box import BetBox
 from .util import Vec2
-from .ui import UIState, UIObject, FadeOverlay
+from .ui import UIState, UIObject, FadeOverlay, BetBox
 
 # Setup logging
 ENABLE_LOGGING = os.environ.get("BLACKJACK_ENABLE_LOGGING", "no")
