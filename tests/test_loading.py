@@ -1,10 +1,7 @@
 import pytest
 import typing
 from blackjack.state.loading import AssetLoader
-
-
-T = typing.TypeVar("T")
-FromFixture = typing.Annotated[T, pytest.fixture]
+from . import FromFixture
 
 
 @pytest.fixture
