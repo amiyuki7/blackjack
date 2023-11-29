@@ -50,7 +50,12 @@ class BetBox(UIObject):
             self.bet_val = self.bet_val[0:-1]
 
         if event.key == pg.K_RETURN:
-            pass
+            if len(self.bet_val) > 0:
+                if self.min_bet <= int(self.bet_val) <= self.max_bet:
+                    from blackjack.state.table import Table
+
+                    assert type(self.ctx.state) == Table
+                    self.ctx.state.player_bet = int(self.bet_val)
 
         # Max bet check
         if len(self.bet_val) > 0:

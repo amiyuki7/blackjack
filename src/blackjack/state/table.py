@@ -170,6 +170,7 @@ class Table(State):
         self.game_objects: List[Drawable] = []
 
         self.deal_counter: int = 0
+        self.player_bet = 0
 
         super().__init__(ctx)
 
@@ -189,9 +190,10 @@ class Table(State):
                 self.game_phase = GamePhase.Bet
             case GamePhase.Bet:
                 self.ctx.ui_state = UIState.Bet
-                # min bet: 10
-                # max bet: 1000
-                pass
+
+                if self.player_bet != 0:
+                    self.game_phase = GamePhase.Deal
+                    self.ctx.ui_state = UIState.Normal
             case GamePhase.Deal:
                 if self.deal_counter < 3 and len(self.movables) == 0:
                     for i in range(0, 4):
