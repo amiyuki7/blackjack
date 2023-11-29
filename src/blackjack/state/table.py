@@ -91,6 +91,32 @@ class Hand:
     def __init__(self) -> None:
         self.cards: List[Card] = []
 
+        self.is_doubled = False
+
+    def calculate_value(self) -> int:
+        cum = 0
+        non_aces = [card for card in self.cards if not card.is_ace]
+
+        for card in non_aces:
+            cum += card.value
+
+        aces = set(self.cards) - set(non_aces)
+        no_aces = len(aces)
+        # If there are more than 1 ace, then you can at most have ONE ace that is valued at 11. Thus, if we have n > 1
+        # aces, we add n-1 to the cumulative value and then check whether the last ace can be valued at 11.
+        if no_aces > 0:
+            if no_aces > 1:
+                cum += no_aces - 1
+
+            try_plus_11 = cum + 11
+
+            if try_plus_11 > 21:
+                cum += 1
+            else:
+                cum += 11
+
+        return cum
+
 
 class Deck:
     def __init__(self, n_decks: int) -> None:
