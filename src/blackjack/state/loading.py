@@ -14,7 +14,6 @@ from importlib import resources as impresources
 import pygame as pg
 import os
 from math import floor
-from loguru import logger
 
 
 class AssetLoader:

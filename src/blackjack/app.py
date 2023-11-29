@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, List, Optional, Sized, Type
+from typing import Dict, List, Optional, Type
 
 import os, sys, pygame as pg
 

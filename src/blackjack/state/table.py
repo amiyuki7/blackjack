@@ -1,16 +1,13 @@
 from __future__ import annotations
-from os import stat, walk, write
-from typing import TYPE_CHECKING, List, Dict, Tuple
+from typing import TYPE_CHECKING, List
 from typing_extensions import override
-
-from pygame.transform import scale, set_smoothscale_backend
 
 if TYPE_CHECKING:
     from ..app import App
 
 from ..app import Drawable, State
 from ..ui import UIState
-from ..util import Vec2, get_evenly_spaced_points
+from ..util import Vec2
 
 from enum import Enum, auto
 from importlib import resources as impresources
@@ -18,13 +15,13 @@ import pygame as pg
 import itertools
 import random
 from queue import LifoQueue
-from loguru import logger
 
 
 class Player:
     def __init__(self, id: int) -> None:
         self.hands: List[Hand] = []
         self.id = id
+        self.balance = 100000
 
 
 class Bot(Player):
@@ -135,9 +132,6 @@ class Movable:
         self.dest = dest
         self.speed = speed
 
-        self.is_headed_right = self.obj.pos.x < self.dest.x
-        self.is_headed_down = self.obj.pos.y < self.dest.y
-
     def move(self, dt: float) -> None:
         """
         Returns
@@ -195,7 +189,7 @@ class Table(State):
                     self.game_phase = GamePhase.Deal
                     self.ctx.ui_state = UIState.Normal
             case GamePhase.Deal:
-                if self.deal_counter < 3 and len(self.movables) == 0:
+                if self.deal_counter < 2 and len(self.movables) == 0:
                     for i in range(0, 4):
                         top_card = self.deck.poptop()
                         deck_zone = self.ctx.zones["deck"].topleft
@@ -216,7 +210,6 @@ class Table(State):
 
     def render(self) -> None:
         self.ctx.display.fill((255, 0, 0))
-        screen_w, screen_h = self.ctx.display.get_width(), self.ctx.display.get_height()
 
         for zone_name, rect in self.ctx.zones.items():
             if "hand" in zone_name:
