@@ -258,8 +258,17 @@ class Table(State):
                         self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
 
                     self.deal_counter += 1
+
+                if self.deal_counter >= 2 and len(self.movables) == 0:
+                    self.game_phase = GamePhase.Play
+
             case GamePhase.Play:
-                pass
+                dealer = self.filter_players(lambda player: type(player) == Dealer)[0]
+                if dealer.hands[0].calculate_value() == 21:
+                    for card in dealer.hands[0].cards:
+                        card.is_facedown = False
+
+                    self.game_phase = GamePhase.EndRound
             case GamePhase.EndRound:
                 # Reset bets to 0
                 for player in self.players:
