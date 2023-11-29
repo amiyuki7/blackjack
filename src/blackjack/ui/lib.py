@@ -13,6 +13,7 @@ import pygame as pg
 class UIState(Enum):
     Normal = auto()
     Bet = auto()
+    Turn = auto()
 
 
 class UIObject(ABC):
