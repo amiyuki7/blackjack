@@ -610,16 +610,30 @@ class Table(State):
                                     zone = (zone[0] + x_offset, zone[1] + y_offset)
                                     self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
                                 case ActionType.Split:
-                                    pass
-                                case ActionType.Stand:
-                                    # Pass the turn onto the dealer
-                                    if self.current_turn[1] == 3:
-                                        # pass the turn onto the dealer
-                                        self.ctx.ui_state = UIState.Normal
-                                        self.turn_phase = TurnPhase.MoveChip
+                                    free_hand = next(hand for hand in target_player.hands if len(hand.cards) == 0)
+                                    second_card = hand.cards[1]
+                                    hand.cards.remove(second_card)
+                                    free_hand.cards.append(second_card)
+
+                                    free_hand_idx = target_player.hands.index(free_hand)
+                                    target_player.round_bets[free_hand_idx] = target_player.round_bets[0]
+                                    if free_hand_idx == 1:
+                                        hand_zone = "br"
+                                    elif free_hand_idx == 2:
+                                        hand_zone = "tl"
                                     else:
-                                        # Move through all the other hands of the player
-                                        self.current_turn = (self.current_turn[0], self.current_turn[1] + 1)
+                                        hand_zone = "tr"
+
+                                    zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
+                                    x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
+                                    y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
+                                    zone = (zone[0] + x_offset, zone[1] + y_offset)
+                                    self.movables.append(Movable(second_card, dest=Vec2(zone[0], zone[1]), speed=400))
+                                case ActionType.Stand:
+                                    hand.is_done = True
+                                    turn_buttons = [u for u in self.ctx.ui_objects if type(u) == TurnButton]
+                                    for button in turn_buttons:
+                                        button.is_disabled = False
 
             case GamePhase.EndRound:
                 # Reset bets to 0
