@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable, List, Tuple
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple
 from typing_extensions import override
 
 from loguru import logger
@@ -15,6 +15,7 @@ from ..util import Vec2
 
 from enum import Enum, auto
 from importlib import resources as impresources
+from math import ceil
 import pygame as pg
 import itertools
 import random
@@ -167,6 +168,14 @@ class Hand:
             - The hand is bust
         """
 
+        self.result: int = 0
+        """
+        0 - loss
+        1 - win
+        2 - draw
+        """
+        self.net_return: int = 0
+
     def calculate_value(self) -> int:
         cum = 0
         non_aces = [card for card in self.cards if not card.is_ace]
@@ -191,7 +200,15 @@ class Hand:
 
         return cum
 
-    def get_word(self) -> str:
+    def get_word(self, is_end_round: Optional[bool] = False) -> str:
+        if is_end_round:
+            if self.result == 0:
+                return "BET LOST"
+            elif self.result == 1:
+                return "WIN"
+            else:
+                return "DRAW"
+
         # Check for blackjack here because I forgot to put it elsewhere
         value = self.calculate_value()
         if value == 21 and len(self.cards) == 2:
@@ -261,6 +278,7 @@ class GamePhase(Enum):
     Deal = auto()
     Play = auto()
     EndRound = auto()
+    Reset = auto()
 
 
 class TurnPhase(Enum):
@@ -341,7 +359,7 @@ class Table(State):
         )
 
         self.DEBUG_FORCE_DEALER_BLACKJACK = False
-        self.DEBUG_FORCE_SPLITTING_HANDS = True
+        self.DEBUG_FORCE_SPLITTING_HANDS = False
 
         if self.DEBUG_FORCE_SPLITTING_HANDS:
             for card in [
@@ -381,7 +399,7 @@ class Table(State):
                 burn_card.pos = Vec2(deck_zone[0], deck_zone[1])
                 burn_card.image_key = "0cardback"
                 burn_zone = self.ctx.zones["burn"].topleft
-                self.movables.append(Movable(burn_card, dest=Vec2(burn_zone[0], burn_zone[1]), speed=2000))
+                self.movables.append(Movable(burn_card, dest=Vec2(burn_zone[0], burn_zone[1]), speed=1500))
 
                 self.game_phase = GamePhase.Bet
             case GamePhase.Bet:
@@ -389,6 +407,7 @@ class Table(State):
 
                 player = self.filter_players(lambda player: type(player) == Player)[0]
                 if player.round_bets[0] != 0:
+                    logger.debug(f"PLAYER BET {player.round_bets[0]}")
                     player.balance -= player.round_bets[0]
                     self.game_phase = GamePhase.Deal
                     self.ctx.ui_state = UIState.Normal
@@ -419,22 +438,23 @@ class Table(State):
 
                         zone = self.ctx.zones[f"hand_{'dealer' if i == -1 else f'bl_{i}'}"].topleft
                         zone = (zone[0] + self.deal_counter * 20, zone[1] + self.deal_counter * 10)
-                        self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+                        self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1500))
 
                     self.deal_counter += 1
 
                 if self.deal_counter >= 2 and len(self.movables) == 0:
                     self.game_phase = GamePhase.Play
+                    self.deal_counter = 0
 
             case GamePhase.Play:
                 # If the dealer gets a blackjack, the round ends
                 dealer = self.filter_players(lambda player: type(player) == Dealer)[0]
                 if dealer.hands[0].calculate_value() == 21:
+                    dealer.hands[0].is_blackjack = True
                     for card in dealer.hands[0].cards:
                         card.is_facedown = False
 
-                    self.game_phase = GamePhase.EndRound
-                    return
+                    self.turn_phase = TurnPhase.Dealer
 
                 # Temporary for developing the ui
                 # self.ctx.ui_state = UIState.Turn
@@ -458,7 +478,7 @@ class Table(State):
                         self.turn_phase = TurnPhase.TurnStart
 
                     self.movables.append(
-                        Movable(chip, dest=dest, speed=1000),
+                        Movable(chip, dest=dest, speed=600),
                     )
 
                 # The chip has just been moved. Now, we determine who's turn it is and what to do.
@@ -489,7 +509,7 @@ class Table(State):
                                 x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
                                 y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
                                 zone = (zone[0] + x_offset, zone[1] + y_offset)
-                                self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+                                self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1500))
                                 pass
                             case ActionType.Double:
                                 # TODO: Refactor out the drawing card code
@@ -510,7 +530,7 @@ class Table(State):
                                 x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
                                 y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
                                 zone = (zone[0] + x_offset, zone[1] + y_offset)
-                                self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+                                self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1500))
                             case ActionType.Split:
                                 free_hand = next(hand for hand in target_player.hands if len(hand.cards) == 0)
                                 current_hand = target_player.hands[target_hand]
@@ -532,7 +552,7 @@ class Table(State):
                                 y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
                                 zone = (new_zone[0] + x_offset, new_zone[1] + y_offset)
                                 self.movables.append(
-                                    Movable(second_card, dest=Vec2(new_zone[0], new_zone[1]), speed=600)
+                                    Movable(second_card, dest=Vec2(new_zone[0], new_zone[1]), speed=400)
                                 )
 
                                 # Hit 2 cards onto each split
@@ -553,10 +573,10 @@ class Table(State):
 
                                 zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
                                 self.movables.append(
-                                    Movable(top_card_1, dest=Vec2(zone[0] + 20, zone[1] + 10), speed=1500)
+                                    Movable(top_card_1, dest=Vec2(zone[0] + 20, zone[1] + 10), speed=1100)
                                 )
                                 self.movables.append(
-                                    Movable(top_card_2, dest=Vec2(new_zone[0] + 20, new_zone[1] + 10), speed=1500)
+                                    Movable(top_card_2, dest=Vec2(new_zone[0] + 20, new_zone[1] + 10), speed=1100)
                                 )
                             case ActionType.Stand:
                                 # Check if the next hand is available
@@ -623,7 +643,7 @@ class Table(State):
                                     x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
                                     y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
                                     zone = (zone[0] + x_offset, zone[1] + y_offset)
-                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1500))
+                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1100))
                                 case ActionType.Double:
                                     hand.is_doubled = True
                                     hand.is_done = True
@@ -647,7 +667,7 @@ class Table(State):
                                     x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
                                     y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
                                     zone = (zone[0] + x_offset, zone[1] + y_offset)
-                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1500))
+                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1100))
                                 case ActionType.Split:
                                     free_hand = next(hand for hand in target_player.hands if len(hand.cards) == 0)
                                     second_card = hand.cards[1]
@@ -669,7 +689,7 @@ class Table(State):
                                     y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
                                     new_zone = (new_zone[0] + x_offset, new_zone[1] + y_offset)
                                     self.movables.append(
-                                        Movable(second_card, dest=Vec2(new_zone[0], new_zone[1]), speed=600)
+                                        Movable(second_card, dest=Vec2(new_zone[0], new_zone[1]), speed=400)
                                     )
 
                                     # Hit 2 cards onto each split
@@ -690,19 +710,110 @@ class Table(State):
 
                                     zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
                                     self.movables.append(
-                                        Movable(top_card_1, dest=Vec2(zone[0] + 20, zone[1] + 10), speed=1500)
+                                        Movable(top_card_1, dest=Vec2(zone[0] + 20, zone[1] + 10), speed=1100)
                                     )
                                     self.movables.append(
-                                        Movable(top_card_2, dest=Vec2(new_zone[0] + 20, new_zone[1] + 10), speed=1500)
+                                        Movable(top_card_2, dest=Vec2(new_zone[0] + 20, new_zone[1] + 10), speed=1100)
                                     )
 
                                 case ActionType.Stand:
                                     hand.is_done = True
 
+                if self.turn_phase == TurnPhase.Dealer:
+                    dealer = self.filter_players(lambda player: type(player) == Dealer)[0]
+                    dealer_zone = self.ctx.zones["hand_dealer"]
+                    dealer_hand = dealer.hands[0]
+                    dealer_hand.cards[1].is_facedown = False
+
+                    if len(self.movables) == 0:
+                        if dealer_hand.calculate_value() < 17:
+                            # Dealer keeps hitting until reaches 17
+                            top_card = self.deck.poptop()
+                            top_card.pos = Vec2(*self.ctx.zones["deck"].topleft)
+                            # dealer_hand.cards.append(top_card)
+                            x_offset = (len(dealer_hand.cards)) * 20
+                            y_offset = (len(dealer_hand.cards)) * 10
+                            zone = (dealer_zone[0] + x_offset, dealer_zone[1] + y_offset)
+                            self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1100))
+                            dealer_hand.cards.append(top_card)
+                        else:
+                            self.game_phase = GamePhase.EndRound
+                            for player in self.filter_players(lambda player: type(player) != Dealer):
+                                for idx, hand in enumerate(player.hands):
+                                    hand_bet = player.round_bets[idx]
+                                    # hand.result = 1
+                                    # hand.net_return = 5000
+                                    for card in hand.cards:
+                                        burn_zone = self.ctx.zones["burn"].topleft
+                                        self.movables.append(Movable(card, dest=Vec2(*burn_zone), speed=550))
+
+                                    # Calculate a value which will be returned back to the balance
+                                    # Dealer BJ + You BJ -> Draw (Net return of bet)
+                                    # Dealer BJ + You No BJ -> Lose (Net return of 0)
+                                    # Dealer No BJ + You BJ -> Win (Net return of 2.5x bet)
+                                    # Dealer Bust + You Bust -> Draw (Net return of bet)
+                                    # Dealer No Bust + You Bust -> Lose (Net return of 0)
+                                    # Dealer Bust + You Don't -> Win (Net return of 2x bet)
+                                    # Dealer > You -> Lose (Net return of 0)
+                                    # Dealer = You -> Draw (Net return of bet)
+                                    # Dealer < You -> Win (Net return of 2x bet)
+
+                                    hand_bet = player.round_bets[idx]
+                                    dealer_value = dealer_hand.calculate_value()
+
+                                    hand_value = hand.calculate_value()
+
+                                    if dealer_value > 21:
+                                        dealer_hand.is_bust = True
+
+                                    if dealer_hand.is_blackjack and hand.is_blackjack:
+                                        hand.result = 2
+                                        hand.net_return = hand_bet
+                                    elif dealer_hand.is_blackjack and not hand.is_blackjack:
+                                        hand.result = 0
+                                        hand.net_return = 0
+                                    elif not dealer_hand.is_blackjack and hand.is_blackjack:
+                                        hand.result = 1
+                                        hand.net_return = ceil(2.5 * hand_bet)
+                                    elif dealer_hand.is_bust and hand.is_bust:
+                                        hand.result = 2
+                                        hand.net_return = hand_bet
+                                    elif not dealer_hand.is_bust and hand.is_bust:
+                                        hand.result = 0
+                                        hand.net_return = 0
+                                    elif dealer_hand.is_bust and not hand.is_bust:
+                                        hand.result = 1
+                                        hand.net_return = 2 * hand_bet
+                                    elif dealer_value > hand_value:
+                                        hand.result = 0
+                                        hand.net_return = 0
+                                    elif dealer_value == hand_value:
+                                        hand.result = 2
+                                        hand.net_return = hand_bet
+                                    elif dealer_value < hand_value:
+                                        hand.result = 1
+                                        hand.net_return = 2 * hand_bet
+
             case GamePhase.EndRound:
-                # Reset bets to 0
                 for player in self.players:
-                    player.round_bets = [0]
+                    player.round_bets = [0, 0, 0, 0]
+                    self.current_turn = (3, 0)
+
+                if len(self.movables) == 0:
+                    for player in self.filter_players(lambda player: type(player) != Dealer):
+                        for hand in player.hands:
+                            player.balance += hand.net_return
+
+                    self.game_phase = GamePhase.Reset
+            case GamePhase.Reset:
+                if len(self.movables) == 0:
+                    for player in self.players:
+                        player.hands = [Hand(), Hand(), Hand(), Hand()]
+                    for card in [o for o in self.game_objects if type(o) == Card]:
+                        self.game_objects.remove(card)
+
+                    self.turn_phase = TurnPhase.MoveChip
+                    self.game_phase = GamePhase.Initial
             case _:
                 pass
 
@@ -751,7 +862,7 @@ class Table(State):
         for game_object in self.game_objects:
             game_object.draw(self.ctx)
 
-        text_pad = 0
+        text_pad = self.ctx.zones["bet_0"].height // 4
 
         if self.game_phase in [GamePhase.Bet, GamePhase.Deal, GamePhase.Play]:
             # Draw the bet text
@@ -784,7 +895,6 @@ class Table(State):
                 left_zone = self.ctx.zones[f"hand_bl_{id}"]
                 right_zone = self.ctx.zones[f"hand_br_{id}"]
                 bet_rect = self.ctx.zones[f"bet_{id}"]
-                text_pad = bet_rect.height // 4
 
                 self.ctx.display.blit(bet_0_text, (left_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery))
                 self.ctx.display.blit(bet_1_text, (right_zone.centerx - bet_1_text.get_width(), bet_rect.centery))
@@ -797,6 +907,54 @@ class Table(State):
                     (right_zone.centerx - bet_3_text.get_width(), bet_rect.centery - bet_3_text.get_height()),
                 )
                 ####################################
+
+        if self.game_phase in [GamePhase.EndRound, GamePhase.Reset]:
+            for player in self.players:
+                id = player.id
+                if id == -1:
+                    # Dealer
+                    continue
+
+                ret_0 = player.hands[0].net_return
+                ret_1 = player.hands[1].net_return
+                ret_2 = player.hands[2].net_return
+                ret_3 = player.hands[3].net_return
+
+                ret_0_text = self.bet_font.render(
+                    "" if len(player.hands[0].cards) == 0 else f"{player.hands[0].get_word(True)} ${ret_0}",
+                    True,
+                    (255, 255, 255),
+                )
+                ret_1_text = self.bet_font.render(
+                    "" if len(player.hands[1].cards) == 0 else f"{player.hands[1].get_word(True)} ${ret_1}",
+                    True,
+                    (255, 255, 255),
+                )
+                ret_2_text = self.bet_font.render(
+                    "" if len(player.hands[2].cards) == 0 else f"{player.hands[2].get_word(True)} ${ret_2}",
+                    True,
+                    (255, 255, 255),
+                )
+                ret_3_text = self.bet_font.render(
+                    "" if len(player.hands[3].cards) == 0 else f"{player.hands[3].get_word(True)} ${ret_3}",
+                    True,
+                    (255, 255, 255),
+                )
+
+                left_zone = self.ctx.zones[f"hand_bl_{id}"]
+                right_zone = self.ctx.zones[f"hand_br_{id}"]
+                bet_rect = self.ctx.zones[f"bet_{id}"]
+
+                self.ctx.display.blit(ret_0_text, (left_zone.centerx - ret_0_text.get_width() // 2, bet_rect.centery))
+                self.ctx.display.blit(ret_1_text, (right_zone.centerx - ret_1_text.get_width(), bet_rect.centery))
+                self.ctx.display.blit(
+                    ret_2_text,
+                    (left_zone.centerx - ret_2_text.get_width() // 2, bet_rect.centery - ret_2_text.get_height()),
+                )
+                self.ctx.display.blit(
+                    ret_3_text,
+                    (right_zone.centerx - ret_3_text.get_width(), bet_rect.centery - ret_3_text.get_height()),
+                )
 
         for player in self.players:
             # Draw stats text (name and balance)
