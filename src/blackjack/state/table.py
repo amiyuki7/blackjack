@@ -632,10 +632,6 @@ class Table(State):
 
                                 case ActionType.Stand:
                                     hand.is_done = True
-                                    turn_buttons = [u for u in self.ctx.ui_objects if type(u) == TurnButton]
-                                    for button in turn_buttons:
-                                        button.is_disabled = False
-                                        button.colour = ActionType.get_colour(button.action_type)
 
             case GamePhase.EndRound:
                 # Reset bets to 0
@@ -649,11 +645,6 @@ class Table(State):
             if movable.is_done():
                 self.game_objects.append(movable.obj)
                 self.movables.remove(movable)
-
-                turn_buttons = [u for u in self.ctx.ui_objects if type(u) == TurnButton]
-                for button in turn_buttons:
-                    button.is_disabled = False
-                    button.colour = ActionType.get_colour(button.action_type)
 
     def render(self) -> None:
         self.ctx.display.fill((20, 20, 20))

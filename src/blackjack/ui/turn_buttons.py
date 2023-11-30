@@ -91,13 +91,14 @@ class TurnButton(UIObject):
         player = self.ctx.state.filter_players(lambda player: player.id == player_id)[0]
         target_hand = player.hands[hand_idx]
 
-        # If the action associated with the button is invalid, disable the button
-        if self.action_type == ActionType.Split:
-            if not (player.allowed_to_potentially_split() and target_hand.allowed_to_split()):
-                self.is_disabled = True
-        elif self.action_type == ActionType.Double:
-            if not target_hand.allowed_to_double():
-                self.is_disabled = True
+        # Enable all buttons after Movables have finished moving, but...
+        # If the action associated with the button is invalid, then disable the button
+        if len(self.ctx.state.movables) == 0:
+            self.is_disabled = False
+            if self.action_type == ActionType.Split:
+                self.is_disabled = not (player.allowed_to_potentially_split() and target_hand.allowed_to_split())
+            elif self.action_type == ActionType.Double:
+                self.is_disabled = not target_hand.allowed_to_double()
 
     def render(self) -> None:
         pg.draw.circle(self.ctx.display, self.colour, self.rect.center, self.rect.width / 2.25)
