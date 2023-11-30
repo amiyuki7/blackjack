@@ -629,11 +629,13 @@ class Table(State):
                                     y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
                                     zone = (zone[0] + x_offset, zone[1] + y_offset)
                                     self.movables.append(Movable(second_card, dest=Vec2(zone[0], zone[1]), speed=400))
+
                                 case ActionType.Stand:
                                     hand.is_done = True
                                     turn_buttons = [u for u in self.ctx.ui_objects if type(u) == TurnButton]
                                     for button in turn_buttons:
                                         button.is_disabled = False
+                                        button.colour = ActionType.get_colour(button.action_type)
 
             case GamePhase.EndRound:
                 # Reset bets to 0
@@ -651,35 +653,27 @@ class Table(State):
                 turn_buttons = [u for u in self.ctx.ui_objects if type(u) == TurnButton]
                 for button in turn_buttons:
                     button.is_disabled = False
+                    button.colour = ActionType.get_colour(button.action_type)
 
     def render(self) -> None:
         self.ctx.display.fill((20, 20, 20))
 
         for zone_name, rect in self.ctx.zones.items():
             if "hand" in zone_name:
-                pg.draw.rect(self.ctx.display, (80, 140, 60), rect)
-            # Coloured zones for debugging and figuring stuff out
-            # if "hand_bl" in zone_name:
-            #     pg.draw.rect(self.ctx.display, (255, 0, 0), rect)
-            # if "hand_br" in zone_name:
-            #     pg.draw.rect(self.ctx.display, (195, 0, 0), rect)
-            # if "hand_tl" in zone_name:
-            #     pg.draw.rect(self.ctx.display, (135, 0, 0), rect)
-            # if "hand_tr" in zone_name:
-            #     pg.draw.rect(self.ctx.display, (75, 0, 0), rect)
+                match self.current_turn[1]:
+                    case 0:
+                        zone = "bl"
+                    case 1:
+                        zone = "br"
+                    case 2:
+                        zone = "tl"
+                    case _:
+                        zone = "tr"
 
-            match self.current_turn[1]:
-                case 0:
-                    zone = "bl"
-                case 1:
-                    zone = "br"
-                case 2:
-                    zone = "tl"
-                case _:
-                    zone = "tr"
-
-            if zone_name == f"hand_{zone}_{self.current_turn[0]}":
-                pg.draw.rect(self.ctx.display, (0, 0, 255), rect)
+                if zone_name == f"hand_{zone}_{self.current_turn[0]}":
+                    pg.draw.rect(self.ctx.display, (247, 213, 39), rect)  # f7d527
+                else:
+                    pg.draw.rect(self.ctx.display, (80, 140, 60), rect)
 
             if "stat" in zone_name:
                 pg.draw.rect(self.ctx.display, (80, 80, 80), rect)
@@ -736,7 +730,7 @@ class Table(State):
                 text_pad = bet_rect.height // 4
 
                 self.ctx.display.blit(bet_0_text, (left_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery))
-                self.ctx.display.blit(bet_1_text, (right_zone.centerx - bet_0_text.get_width(), bet_rect.centery))
+                self.ctx.display.blit(bet_1_text, (right_zone.centerx - bet_1_text.get_width(), bet_rect.centery))
                 self.ctx.display.blit(
                     bet_2_text,
                     (left_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery - bet_2_text.get_height()),
