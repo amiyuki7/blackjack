@@ -654,6 +654,19 @@ class Table(State):
             # if "hand_tr" in zone_name:
             #     pg.draw.rect(self.ctx.display, (75, 0, 0), rect)
 
+            match self.current_turn[1]:
+                case 0:
+                    zone = "bl"
+                case 1:
+                    zone = "br"
+                case 2:
+                    zone = "tl"
+                case _:
+                    zone = "tr"
+
+            if zone_name == f"hand_{zone}_{self.current_turn[0]}":
+                pg.draw.rect(self.ctx.display, (0, 0, 255), rect)
+
             if "stat" in zone_name:
                 pg.draw.rect(self.ctx.display, (80, 80, 80), rect)
             if "bet" in zone_name:
