@@ -709,14 +709,14 @@ class Table(State):
                 text_pad = bet_rect.height // 4
 
                 self.ctx.display.blit(bet_0_text, (left_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery))
-                self.ctx.display.blit(bet_1_text, (right_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery))
+                self.ctx.display.blit(bet_1_text, (right_zone.centerx - bet_0_text.get_width(), bet_rect.centery))
                 self.ctx.display.blit(
                     bet_2_text,
                     (left_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery - bet_2_text.get_height()),
                 )
                 self.ctx.display.blit(
                     bet_3_text,
-                    (right_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery - bet_3_text.get_height()),
+                    (right_zone.centerx - bet_0_text.get_width(), bet_rect.centery - bet_3_text.get_height()),
                 )
                 ####################################
 
