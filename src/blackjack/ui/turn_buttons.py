@@ -66,17 +66,28 @@ class TurnButton(UIObject):
         super().__init__(ctx, target_state)
 
     def handle_mouse_hover(self, event: pg.event.Event) -> None:
-        self.colour = (
-            (255, 255, 255)
-            if in_radial_distance(self.rect.center, self.radius, event.pos)
-            else ActionType.get_colour(self.action_type)
-        )
+        if not self.is_disabled:
+            self.colour = (
+                (255, 255, 255)
+                if in_radial_distance(self.rect.center, self.radius, event.pos)
+                else ActionType.get_colour(self.action_type)
+            )
 
     def update(self) -> None:
         # If invalid, gray out the colour
         from blackjack.state.table import Table
 
         assert type(self.ctx.state) == Table
+
+        player_id, hand_idx = self.ctx.state.current_turn
+        player = self.ctx.state.filter_players(lambda player: player.id == player_id)[0]
+        target_hand = player.hands[hand_idx]
+
+        if self.action_type == ActionType.Split:
+            if not (player.allowed_to_potentially_split() and target_hand.allowed_to_split()):
+                print("DISABLING SPLIT")
+                self.colour = (100, 100, 100)
+                self.is_disabled = True
 
     def render(self) -> None:
         pg.draw.circle(self.ctx.display, self.colour, self.rect.center, self.rect.width / 2.25)
