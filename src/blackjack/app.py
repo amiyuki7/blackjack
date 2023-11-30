@@ -7,8 +7,10 @@ from abc import ABC, abstractmethod
 
 from loguru import logger
 
+from blackjack.ui.turn_buttons import ActionType
+
 from .util import Vec2
-from .ui import UIState, UIObject, FadeOverlay, BetBox
+from .ui import UIState, UIObject, FadeOverlay, BetBox, TurnButton
 
 # Setup logging
 ENABLE_LOGGING = os.environ.get("BLACKJACK_ENABLE_LOGGING", "no")
@@ -79,6 +81,10 @@ class App:
         self.ui_objects.append(FadeOverlay(self, UIState.Bet))
         self.ui_objects.append(BetBox(self, UIState.Bet))
 
+        for action_type in ActionType:
+            self.ui_objects.append(b := TurnButton(self, action_type, UIState.Turn))
+            logger.debug(f"Appended {action_type} Button {repr(b)}")
+
     def update(self) -> None:
         self.state.update()
 
@@ -93,6 +99,10 @@ class App:
                     case UIState.Bet:
                         # Filter out the bet box object
                         [u for u in self.ui_objects if type(u) == BetBox][0].handle_key_update(event)
+            if event.type == pg.MOUSEMOTION:
+                match self.ui_state:
+                    case UIState.Turn:
+                        [u.handle_mouse_hover(event) for u in self.ui_objects if type(u) == TurnButton]
 
         # Only update UI Objects during the correct UI State
         for obj in self.ui_objects:

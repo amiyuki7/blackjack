@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable, List
+from typing import TYPE_CHECKING, Callable, List, Tuple
 from typing_extensions import override
 
 if TYPE_CHECKING:
@@ -40,6 +40,7 @@ class Bot(Player):
         # Check blackjack.ui.bet_box for min/max bet values
         min_bet, max_bet = 100, 5000
         self.round_bet = random.randrange(min_bet, max_bet + 1)
+        self.balance -= self.round_bet
 
 
 class Dealer(Player):
@@ -193,6 +194,20 @@ class Movable:
         return self.obj.pos.x == self.dest.x and self.obj.pos.y == self.dest.y
 
 
+class Chip(Drawable):
+    def __init__(self) -> None:
+        self.image_key = "chip"
+
+        super().__init__()
+
+    @override
+    def draw(self, ctx: App) -> None:
+        chip = ctx.images[self.image_key]
+        chip = pg.transform.scale(chip, (chip.get_width() * 0.25, chip.get_height() * 0.25))
+        blit_rect = pg.rect.Rect(self.pos.x, self.pos.y, chip.get_width(), chip.get_height())
+        ctx.display.blit(chip, blit_rect)
+
+
 class Table(State):
     def __init__(self, ctx: App) -> None:
         # Dealer will always have the id 0, and the player will always have the id 1
@@ -203,6 +218,15 @@ class Table(State):
         self.movables: List[Movable] = []
         self.game_objects: List[Drawable] = []
 
+        # Spawn in the turn chip and set its initial position to be just below the dealer zone
+        chip = Chip()
+        dealer_zone = ctx.zones["hand_dealer"].copy()
+        chip.pos = Vec2(
+            dealer_zone.centerx - ctx.images[chip.image_key].get_width() * 0.125,
+            dealer_zone.centery + dealer_zone.height * 0.5,
+        )
+        self.game_objects.append(chip)
+
         self.deal_counter: int = 0
 
         self.stats_font = pg.font.Font(
@@ -210,6 +234,10 @@ class Table(State):
         )
 
         self.DEBUG_FORCE_DEALER_BLACKJACK = False
+
+        # [0] refers to the player id (Bot(3) is always the rightmost one, so we start with 3)
+        # [1] refers to the index of a specific player hand
+        self.current_turn: Tuple[int, int] = (3, 0)
 
         super().__init__(ctx)
 
@@ -235,6 +263,7 @@ class Table(State):
 
                 player = self.filter_players(lambda player: type(player) == Player)[0]
                 if player.round_bet != 0:
+                    player.balance -= player.round_bet
                     self.game_phase = GamePhase.Deal
                     self.ctx.ui_state = UIState.Normal
 
@@ -248,9 +277,9 @@ class Table(State):
 
                         if i == -1 and self.DEBUG_FORCE_DEALER_BLACKJACK:
                             if self.deal_counter == 0:
-                                top_card = Card(10, suit="spades", image_key="queen_of_spades")
+                                top_card = Card(10, suit="spades", image_key="jack_of_spades")
                             else:
-                                top_card = Card(-1, suit="hearts", image_key="ace_of_hearts")
+                                top_card = Card(-1, suit="spades", image_key="ace_of_spades")
                         else:
                             top_card = self.deck.poptop()
 
@@ -272,6 +301,16 @@ class Table(State):
                     self.game_phase = GamePhase.Play
 
             case GamePhase.Play:
+                # Temporary for developing the ui
+                # self.ctx.ui_state = UIState.Turn
+                target_player = self.filter_players(lambda player: player.id == self.current_turn[0])
+                # move the chip
+                # initiate the turn
+                # end the turn
+                # move the chip
+                # repeat
+
+                # If the dealer gets a blackjack, the round ends
                 dealer = self.filter_players(lambda player: type(player) == Dealer)[0]
                 if dealer.hands[0].calculate_value() == 21:
                     for card in dealer.hands[0].cards:
@@ -292,7 +331,7 @@ class Table(State):
                 self.movables.remove(movable)
 
     def render(self) -> None:
-        self.ctx.display.fill((255, 0, 0))
+        self.ctx.display.fill((20, 20, 20))
 
         for zone_name, rect in self.ctx.zones.items():
             if "hand" in zone_name:
@@ -316,6 +355,8 @@ class Table(State):
         for game_object in self.game_objects:
             game_object.draw(self.ctx)
 
+        text_pad = 0
+
         if self.game_phase in [GamePhase.Bet, GamePhase.Deal, GamePhase.Play]:
             # Draw the bet text
             for player in self.players:
@@ -326,4 +367,19 @@ class Table(State):
 
                 bet_text = self.stats_font.render(f"Bet: ${player.round_bet}", True, (255, 255, 255))
                 rect = self.ctx.zones[f"bet_{id}"]
-                self.ctx.display.blit(bet_text, (rect.left + rect.height // 4, rect.top + rect.height // 4))
+                text_pad = rect.height // 4
+                self.ctx.display.blit(bet_text, (rect.left + text_pad, rect.top + text_pad))
+
+        for player in self.players:
+            # Draw stats text (name and balance)
+            id = player.id
+            if id == -1:
+                # Dealer
+                continue
+
+            name = "Player" if id == 0 else f"Bot {id}"
+            name_text = self.stats_font.render(name, True, (255, 255, 255))
+            bal_text = self.stats_font.render(f"Bal: ${player.balance}", True, (255, 255, 255))
+            rect = self.ctx.zones[f"stat_{id}"]
+            self.ctx.display.blit(name_text, (rect.left + text_pad, rect.top + text_pad))
+            self.ctx.display.blit(bal_text, (rect.left + text_pad, rect.top + text_pad + bal_text.get_height()))

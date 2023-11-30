@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, List, TypeVar
+from typing import Generic, List, Tuple, TypeVar
 import math
 
 T = TypeVar("T", covariant=True)
@@ -40,6 +40,17 @@ def get_evenly_spaced_points(w: float, x: float, s: int) -> List[float]:
     ```
     """
     return [(n * w + x * (n - 1 - s)) / (s + 1) for n in range(1, s + 1)]
+
+
+def linear_distance(xy1: Tuple[float, float], xy2: Tuple[float, float]) -> float:
+    x1, y1 = xy1
+    x2, y2 = xy2
+    return math.sqrt(math.pow(x2 - x1, 2) + math.pow(y2 - y1, 2))
+
+
+def in_radial_distance(circle_center: Tuple[float, float], radius: float, point: Tuple[float, float]) -> bool:
+    # The -5 is an app specific correction constant and has no mathematical significance
+    return linear_distance(point, circle_center) <= radius - 5
 
 
 class Vec2:
