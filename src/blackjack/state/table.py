@@ -517,11 +517,37 @@ class Table(State):
                                 else:
                                     hand_zone = "tr"
 
-                                zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
+                                new_zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
                                 x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
                                 y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
-                                zone = (zone[0] + x_offset, zone[1] + y_offset)
-                                self.movables.append(Movable(second_card, dest=Vec2(zone[0], zone[1]), speed=400))
+                                zone = (new_zone[0] + x_offset, new_zone[1] + y_offset)
+                                self.movables.append(
+                                    Movable(second_card, dest=Vec2(new_zone[0], new_zone[1]), speed=600)
+                                )
+
+                                # Hit 2 cards onto each split
+                                top_card_1, top_card_2 = self.deck.poptop(), self.deck.poptop()
+                                top_card_1.pos = top_card_2.pos = Vec2(*self.ctx.zones["deck"].topleft)
+
+                                target_player.add_card(self.current_turn[1], top_card_1)
+                                target_player.add_card(free_hand_idx, top_card_2)
+
+                                if target_hand == 0:
+                                    hand_zone = "bl"
+                                elif target_hand == 1:
+                                    hand_zone = "br"
+                                elif target_hand == 2:
+                                    hand_zone = "tl"
+                                else:
+                                    hand_zone = "tr"
+
+                                zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
+                                self.movables.append(
+                                    Movable(top_card_1, dest=Vec2(zone[0] + 20, zone[1] + 10), speed=1000)
+                                )
+                                self.movables.append(
+                                    Movable(top_card_2, dest=Vec2(new_zone[0] + 20, new_zone[1] + 10), speed=1000)
+                                )
                             case ActionType.Stand:
                                 # Check if the next hand is available
                                 if self.current_turn[1] == 3:
@@ -585,7 +611,7 @@ class Table(State):
                                     x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
                                     y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
                                     zone = (zone[0] + x_offset, zone[1] + y_offset)
-                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1500))
                                 case ActionType.Double:
                                     hand.is_doubled = True
                                     hand.is_done = True
@@ -608,7 +634,7 @@ class Table(State):
                                     x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
                                     y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
                                     zone = (zone[0] + x_offset, zone[1] + y_offset)
-                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=1500))
                                 case ActionType.Split:
                                     free_hand = next(hand for hand in target_player.hands if len(hand.cards) == 0)
                                     second_card = hand.cards[1]
@@ -618,17 +644,43 @@ class Table(State):
                                     free_hand_idx = target_player.hands.index(free_hand)
                                     target_player.round_bets[free_hand_idx] = target_player.round_bets[0]
                                     if free_hand_idx == 1:
-                                        hand_zone = "br"
+                                        free_hand_zone = "br"
                                     elif free_hand_idx == 2:
+                                        free_hand_zone = "tl"
+                                    else:
+                                        free_hand_zone = "tr"
+
+                                    new_zone = self.ctx.zones[f"hand_{free_hand_zone}_{target_player.id}"].topleft
+                                    x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
+                                    y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
+                                    new_zone = (new_zone[0] + x_offset, new_zone[1] + y_offset)
+                                    self.movables.append(
+                                        Movable(second_card, dest=Vec2(new_zone[0], new_zone[1]), speed=600)
+                                    )
+
+                                    # Hit 2 cards onto each split
+                                    top_card_1, top_card_2 = self.deck.poptop(), self.deck.poptop()
+                                    top_card_1.pos = top_card_2.pos = Vec2(*self.ctx.zones["deck"].topleft)
+
+                                    target_player.add_card(self.current_turn[1], top_card_1)
+                                    target_player.add_card(free_hand_idx, top_card_2)
+
+                                    if target_hand == 0:
+                                        hand_zone = "bl"
+                                    elif target_hand == 1:
+                                        hand_zone = "br"
+                                    elif target_hand == 2:
                                         hand_zone = "tl"
                                     else:
                                         hand_zone = "tr"
 
                                     zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
-                                    x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
-                                    y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
-                                    zone = (zone[0] + x_offset, zone[1] + y_offset)
-                                    self.movables.append(Movable(second_card, dest=Vec2(zone[0], zone[1]), speed=400))
+                                    self.movables.append(
+                                        Movable(top_card_1, dest=Vec2(zone[0] + 20, zone[1] + 10), speed=1500)
+                                    )
+                                    self.movables.append(
+                                        Movable(top_card_2, dest=Vec2(new_zone[0] + 20, new_zone[1] + 10), speed=1500)
+                                    )
 
                                 case ActionType.Stand:
                                     hand.is_done = True
