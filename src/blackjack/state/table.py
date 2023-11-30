@@ -58,7 +58,7 @@ class Bot(Player):
         # https://www.blackjackapprenticeship.com/blackjack-strategy-charts/
         # For now, it'll be a very simple set of rules:
         # > Hit if card total is less than 16
-        # TODO: > Split pair 6/7/8s
+        # TODO: > Split pair 7/8/A
         # > Double on a hard ORIGINAL DEAL total of 10/11 (no ace)
 
         hand = self.hands[hand_idx]
@@ -73,6 +73,10 @@ class Bot(Player):
         if hand_value > 21:
             hand.is_bust = True
             return ActionType.Stand
+
+        if len(hand.cards) == 2 and hand.cards[0].value == hand.cards[1].value and hand.cards[0].value in [7, 8, -1]:
+            logger.debug(f"Bot {id} Splitted!")
+            return ActionType.Split
 
         if (
             all([not card.is_ace for card in hand.cards])
@@ -204,7 +208,7 @@ class Hand:
 
 class Deck:
     def __init__(self, n_decks: int) -> None:
-        self.__card_queue: LifoQueue[str] = LifoQueue()
+        self._card_queue: LifoQueue[str] = LifoQueue()
         self.n_decks = n_decks
 
     def new_shuffled_deck(self) -> None:
@@ -220,10 +224,10 @@ class Deck:
         ]
         flattened = list(itertools.chain(*cards))
         random.shuffle(flattened)
-        self.__card_queue.queue = flattened
+        self._card_queue.queue = flattened
 
     def poptop(self) -> Card:
-        top = self.__card_queue.get()
+        top = self._card_queue.get()
         # String format is "<value>_of_<suit>"
         value, suit = (parts := top.split("_"))[0], parts[-1]
 
@@ -238,7 +242,7 @@ class Deck:
         return Card(val, suit, top)
 
     def is_exhausted(self) -> bool:
-        return self.__card_queue.empty()
+        return self._card_queue.empty()
 
 
 class GamePhase(Enum):
@@ -327,6 +331,23 @@ class Table(State):
         )
 
         self.DEBUG_FORCE_DEALER_BLACKJACK = False
+        self.DEBUG_FORCE_SPLITTING_HANDS = True
+
+        if self.DEBUG_FORCE_SPLITTING_HANDS:
+            for card in [
+                "ace_of_spades",
+                "2_of_diamonds",
+                "8_of_diamonds",
+                "jack_of_clubs",
+                "10_of_diamonds",
+                "ace_of_hearts",
+                "ace_of_spades",
+                "8_of_hearts",
+                "king_of_hearts",
+                "queen_of_clubs",
+                "ace_of_spades",
+            ]:
+                self.deck._card_queue.put(card)
 
         self.current_turn: Tuple[int, int] = (3, 0)
         """
@@ -481,7 +502,26 @@ class Table(State):
                                 zone = (zone[0] + x_offset, zone[1] + y_offset)
                                 self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
                             case ActionType.Split:
-                                pass
+                                free_hand = next(hand for hand in target_player.hands if len(hand.cards) == 0)
+                                current_hand = target_player.hands[target_hand]
+                                second_card = current_hand.cards[1]
+                                current_hand.cards.remove(second_card)
+                                free_hand.cards.append(second_card)
+
+                                free_hand_idx = target_player.hands.index(free_hand)
+                                target_player.round_bets[free_hand_idx] = target_player.round_bets[0]
+                                if free_hand_idx == 1:
+                                    hand_zone = "br"
+                                elif free_hand_idx == 2:
+                                    hand_zone = "tl"
+                                else:
+                                    hand_zone = "tr"
+
+                                zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
+                                x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
+                                y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
+                                zone = (zone[0] + x_offset, zone[1] + y_offset)
+                                self.movables.append(Movable(second_card, dest=Vec2(zone[0], zone[1]), speed=400))
                             case ActionType.Stand:
                                 # Check if the next hand is available
                                 if self.current_turn[1] == 3:
