@@ -3,7 +3,7 @@ requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "blackjack-amiyuki7"
+name = "blackjack-amiyuki"
 authors = [{name = "Alexander Xie", email = "amiyuki788@gmail.com"}]
 readme = "README.md"
 license = {file = "LICENSE"}
