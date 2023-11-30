@@ -252,7 +252,7 @@ class GamePhase(Enum):
 class TurnPhase(Enum):
     MoveChip = auto()
     TurnStart = auto()
-    InTurn = auto()
+    Dealer = auto()
 
 
 class Movable:
@@ -417,16 +417,18 @@ class Table(State):
 
                     target_zone = self.ctx.zones[f"hand_tl_{target_player.id}"]
                     dealer_zone = self.ctx.zones["hand_dealer"]
+                    y = dealer_zone.centery + dealer_zone.height * 0.5
+
+                    if self.current_turn == (0, 3):
+                        dest = Vec2(dealer_zone.centerx - self.ctx.images[chip.image_key].get_width() * 0.125, y)
+                        self.turn_phase = TurnPhase.Dealer
+                    else:
+                        dest = Vec2(target_zone.centerx, y)
+                        self.turn_phase = TurnPhase.TurnStart
 
                     self.movables.append(
-                        Movable(
-                            chip,
-                            dest=Vec2(target_zone.centerx, dealer_zone.centery + dealer_zone.height * 0.5),
-                            speed=1000,
-                        ),
+                        Movable(chip, dest=dest, speed=1000),
                     )
-
-                    self.turn_phase = TurnPhase.TurnStart
 
                 # The chip has just been moved. Now, we determine who's turn it is and what to do.
                 if self.turn_phase == TurnPhase.TurnStart and len(self.movables) == 0:
@@ -498,24 +500,27 @@ class Table(State):
 
                         hand = target_player.hands[target_hand]
 
-                        if hand.calculate_value() > 21:
+                        if hand.calculate_value() == 21:
+                            hand.is_blackjack = True
+                            hand.is_done = True
+                        elif hand.calculate_value() > 21:
                             hand.is_bust = True
+                            hand.is_done = True
 
-                        if hand.is_bust or len(hand.cards) == 0:
+                        if hand.is_done or len(hand.cards) == 0:
                             if self.current_turn[1] == 3:
                                 # Pass the turn onto the dealer
-                                print("Dealers turn!")
                                 self.ctx.ui_state = UIState.Normal
+                                self.turn_phase = TurnPhase.MoveChip
                             else:
                                 # Move to the next hand
                                 self.current_turn = (self.current_turn[0], self.current_turn[1] + 1)
                             return
 
                         turn_buttons = [u for u in self.ctx.ui_objects if type(u) == TurnButton]
-                        for button in turn_buttons:
-                            button.is_disabled = False
+
                         action = [u.action_type for u in turn_buttons if u.is_clicked]
-                        if len(action) == 1:
+                        if len(action) == 1 and not hand.is_done:
                             # The player has clicked a button! Disable all buttons until Movable animation is over
                             for u in [u for u in self.ctx.ui_objects if type(u) == TurnButton]:
                                 u.is_disabled = True
@@ -542,7 +547,28 @@ class Table(State):
                                     zone = (zone[0] + x_offset, zone[1] + y_offset)
                                     self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
                                 case ActionType.Double:
-                                    pass
+                                    hand.is_doubled = True
+                                    hand.is_done = True
+                                    target_player.round_bets[target_hand] *= 2
+
+                                    top_card = self.deck.poptop()
+                                    top_card.pos = Vec2(*self.ctx.zones["deck"].topleft)
+                                    target_player.add_card(self.current_turn[1], top_card)
+
+                                    if target_hand == 0:
+                                        hand_zone = "bl"
+                                    elif target_hand == 1:
+                                        hand_zone = "br"
+                                    elif target_hand == 2:
+                                        hand_zone = "tl"
+                                    else:
+                                        hand_zone = "tr"
+
+                                    zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
+                                    x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
+                                    y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
+                                    zone = (zone[0] + x_offset, zone[1] + y_offset)
+                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
                                 case ActionType.Split:
                                     pass
                                 case ActionType.Stand:
@@ -550,6 +576,7 @@ class Table(State):
                                     if self.current_turn[1] == 3:
                                         # pass the turn onto the dealer
                                         self.ctx.ui_state = UIState.Normal
+                                        self.turn_phase = TurnPhase.MoveChip
                                     else:
                                         # Move through all the other hands of the player
                                         self.current_turn = (self.current_turn[0], self.current_turn[1] + 1)
@@ -566,6 +593,10 @@ class Table(State):
             if movable.is_done():
                 self.game_objects.append(movable.obj)
                 self.movables.remove(movable)
+
+                turn_buttons = [u for u in self.ctx.ui_objects if type(u) == TurnButton]
+                for button in turn_buttons:
+                    button.is_disabled = False
 
     def render(self) -> None:
         self.ctx.display.fill((20, 20, 20))

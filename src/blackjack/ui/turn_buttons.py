@@ -96,7 +96,7 @@ class TurnButton(UIObject):
             if not (player.allowed_to_potentially_split() and target_hand.allowed_to_split()):
                 self.is_disabled = True
         elif self.action_type == ActionType.Double:
-            if not target_hand.allowed_to_double:
+            if not target_hand.allowed_to_double():
                 self.is_disabled = True
 
     def render(self) -> None:
