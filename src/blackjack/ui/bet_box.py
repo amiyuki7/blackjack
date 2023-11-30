@@ -56,7 +56,7 @@ class BetBox(UIObject):
 
                     assert type(self.ctx.state) == Table
                     player = self.ctx.state.filter_players(lambda player: type(player) == Player)[0]
-                    player.round_bet = int(self.bet_val)
+                    player.round_bets[0] = int(self.bet_val)
 
         # Max bet check
         if len(self.bet_val) > 0:

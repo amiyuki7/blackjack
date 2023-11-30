@@ -2,6 +2,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, List, Tuple
 from typing_extensions import override
 
+from loguru import logger
+
+from blackjack.ui.turn_buttons import ActionType
+
 if TYPE_CHECKING:
     from ..app import App
 
@@ -19,16 +23,22 @@ from queue import LifoQueue
 
 class Player:
     def __init__(self, id: int) -> None:
-        self.hands: List[Hand] = [Hand()]
+        self.hands: List[Hand] = [Hand(), Hand(), Hand(), Hand()]
         self.id = id
         self.balance = 100000
 
-        self.round_bet = 0
+        # self.round_bet = 0
+        self.round_bets: List[int] = [0, 0, 0, 0]
+        """Index corresponds to the bet per each hand in self.hands"""
 
-        self.current_hand = 0
+        # self.current_hand = 0
 
-    def add_card(self, card: Card) -> None:
-        self.hands[self.current_hand].cards.append(card)
+    def add_card(self, hand_idx: int, card: Card) -> None:
+        # self.hands[self.current_hand].cards.append(card)
+        self.hands[hand_idx].cards.append(card)
+
+    def allowed_to_potentially_split(self) -> bool:
+        return len(self.hands) < 4
 
 
 class Bot(Player):
@@ -39,8 +49,49 @@ class Bot(Player):
         # Not going to add heuristics for betting - just random value
         # Check blackjack.ui.bet_box for min/max bet values
         min_bet, max_bet = 100, 5000
-        self.round_bet = random.randrange(min_bet, max_bet + 1)
-        self.balance -= self.round_bet
+        self.round_bets[0] = random.randrange(min_bet, max_bet + 1)
+        self.balance -= self.round_bets[0]
+
+    def decide(self, hand_idx: int, dealer: Dealer) -> ActionType:
+        # TODO: Make decisions based on the revealed card of the Dealer based on this strategy chart:
+        # https://www.blackjackapprenticeship.com/blackjack-strategy-charts/
+        # For now, it'll be a very simple set of rules:
+        # > Hit if card total is less than 16
+        # TODO: > Split pair 6/7/8s
+        # > Double on a hard ORIGINAL DEAL total of 10/11 (no ace)
+
+        hand = self.hands[hand_idx]
+        if hand.is_done:
+            return ActionType.Stand
+
+        hand_value = hand.calculate_value()
+        if hand_value == 0:
+            # Empty hand should be "passed"
+            return ActionType.Stand
+
+        if (
+            all([not card.is_ace for card in hand.cards])
+            and (hand_value == 10 or hand_value == 11)
+            and len(hand.cards) == 2
+        ):
+            hand.is_done = True
+            hand.is_doubled = True
+            self.round_bets[hand_idx] *= 2
+            logger.debug(f"Bot {id} Doubled!")
+            return ActionType.Double
+
+        if hand_value < 16:
+            logger.debug(f"Bot {id} Hit!")
+            return ActionType.Hit
+
+        hand.is_done = True
+        logger.debug(f"Bot {id} Stood!")
+        return ActionType.Stand
+
+
+# class Action:
+#     def __init__(self, action_type: ActionType) -> None:
+#         self.action_type = action_type
 
 
 class Dealer(Player):
@@ -93,6 +144,15 @@ class Hand:
         self.cards: List[Card] = []
 
         self.is_doubled = False
+
+        self.is_blackjack = False
+        self.is_done = False
+        """
+        A hand is done if ONE of:
+            - The hand is blackjack or 21
+            - The hand is stood
+            - The hand is bust
+        """
 
     def calculate_value(self) -> int:
         cum = 0
@@ -166,6 +226,12 @@ class GamePhase(Enum):
     EndRound = auto()
 
 
+class TurnPhase(Enum):
+    MoveChip = auto()
+    TurnStart = auto()
+    InTurn = auto()
+
+
 class Movable:
     def __init__(self, obj: Drawable, dest: Vec2, speed: int) -> None:
         """speed | how long (ms) the object should take to reach its destination"""
@@ -215,6 +281,7 @@ class Table(State):
         self.deck = Deck(n_decks=6)
         self.deck.new_shuffled_deck()
         self.game_phase: GamePhase = GamePhase.Initial
+        self.turn_phase: TurnPhase = TurnPhase.MoveChip
         self.movables: List[Movable] = []
         self.game_objects: List[Drawable] = []
 
@@ -229,15 +296,20 @@ class Table(State):
 
         self.deal_counter: int = 0
 
+        self.bet_font = pg.font.Font(
+            str(impresources.files("blackjack").joinpath("fonts/KozGoPro-Light.otf")), ctx.zones["bet_0"].height // 4
+        )
         self.stats_font = pg.font.Font(
             str(impresources.files("blackjack").joinpath("fonts/KozGoPro-Light.otf")), ctx.zones["bet_0"].height // 2
         )
 
         self.DEBUG_FORCE_DEALER_BLACKJACK = False
 
-        # [0] refers to the player id (Bot(3) is always the rightmost one, so we start with 3)
-        # [1] refers to the index of a specific player hand
         self.current_turn: Tuple[int, int] = (3, 0)
+        """
+        [0] refers to the player id (Bot(3) is always the rightmost one, so we start with 3)
+        [1] refers to the index of a specific player hand
+        """
 
         super().__init__(ctx)
 
@@ -262,8 +334,8 @@ class Table(State):
                 self.ctx.ui_state = UIState.Bet
 
                 player = self.filter_players(lambda player: type(player) == Player)[0]
-                if player.round_bet != 0:
-                    player.balance -= player.round_bet
+                if player.round_bets[0] != 0:
+                    player.balance -= player.round_bets[0]
                     self.game_phase = GamePhase.Deal
                     self.ctx.ui_state = UIState.Normal
 
@@ -289,10 +361,10 @@ class Table(State):
                         if self.deal_counter == 1 and i == -1:
                             top_card.is_facedown = True
 
-                        target.add_card(top_card)
+                        target.add_card(0, top_card)
 
                         zone = self.ctx.zones[f"hand_{'dealer' if i == -1 else f'bl_{i}'}"].topleft
-                        zone = (zone[0] + self.deal_counter * 25, zone[1] + self.deal_counter * 25)
+                        zone = (zone[0] + self.deal_counter * 20, zone[1] + self.deal_counter * 10)
                         self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
 
                     self.deal_counter += 1
@@ -301,15 +373,6 @@ class Table(State):
                     self.game_phase = GamePhase.Play
 
             case GamePhase.Play:
-                # Temporary for developing the ui
-                # self.ctx.ui_state = UIState.Turn
-                target_player = self.filter_players(lambda player: player.id == self.current_turn[0])
-                # move the chip
-                # initiate the turn
-                # end the turn
-                # move the chip
-                # repeat
-
                 # If the dealer gets a blackjack, the round ends
                 dealer = self.filter_players(lambda player: type(player) == Dealer)[0]
                 if dealer.hands[0].calculate_value() == 21:
@@ -317,10 +380,112 @@ class Table(State):
                         card.is_facedown = False
 
                     self.game_phase = GamePhase.EndRound
+                    return
+
+                # Temporary for developing the ui
+                # self.ctx.ui_state = UIState.Turn
+                target_player = self.filter_players(lambda player: player.id == self.current_turn[0])[0]
+                dealer = self.filter_players(lambda player: type(player) == Dealer)[0]
+                assert type(dealer) == Dealer
+
+                if self.turn_phase == TurnPhase.MoveChip:
+                    chip = [x for x in self.game_objects if type(x) == Chip][0]
+                    self.game_objects.remove(chip)
+
+                    target_zone = self.ctx.zones[f"hand_tl_{target_player.id}"]
+                    dealer_zone = self.ctx.zones["hand_dealer"]
+
+                    self.movables.append(
+                        Movable(
+                            chip,
+                            dest=Vec2(target_zone.centerx, dealer_zone.centery + dealer_zone.height * 0.5),
+                            speed=1000,
+                        ),
+                    )
+
+                    self.turn_phase = TurnPhase.TurnStart
+
+                # The chip has just been moved. Now, we determine who's turn it is and what to do.
+                if self.turn_phase == TurnPhase.TurnStart and len(self.movables) == 0:
+                    # all_not_done_hands = [hand for hand in target_player.hands if not hand.is_done]
+
+                    if type(target_player) == Bot:
+                        action = target_player.decide(self.current_turn[1], dealer)
+
+                        match action:
+                            case ActionType.Hit:
+                                # TODO: Refactor out the drawing card code
+                                target_hand = self.current_turn[1]
+
+                                top_card = self.deck.poptop()
+                                top_card.pos = Vec2(*self.ctx.zones["deck"].topleft)
+                                target_player.add_card(self.current_turn[1], top_card)
+
+                                if target_hand == 0:
+                                    hand_zone = "bl"
+                                elif target_hand == 1:
+                                    hand_zone = "br"
+                                elif target_hand == 2:
+                                    hand_zone = "tl"
+                                else:
+                                    hand_zone = "tr"
+
+                                zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
+                                x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
+                                y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
+                                zone = (zone[0] + x_offset, zone[1] + y_offset)
+                                self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+                                pass
+                            case ActionType.Double:
+                                # TODO: Refactor out the drawing card code
+                                target_hand = self.current_turn[1]
+
+                                top_card = self.deck.poptop()
+                                top_card.pos = Vec2(*self.ctx.zones["deck"].topleft)
+                                target_player.add_card(self.current_turn[1], top_card)
+
+                                if target_hand == 0:
+                                    hand_zone = "bl"
+                                elif target_hand == 1:
+                                    hand_zone = "br"
+                                elif target_hand == 2:
+                                    hand_zone = "tl"
+                                else:
+                                    hand_zone = "tr"
+
+                                zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
+                                x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
+                                y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
+                                zone = (zone[0] + x_offset, zone[1] + y_offset)
+                                self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+                            case ActionType.Split:
+                                pass
+                            case ActionType.Stand:
+                                # Check if the next hand is available
+                                if self.current_turn[1] == 3:
+                                    # After going through the last hand of the player, move left one player
+                                    self.current_turn = (self.current_turn[0] - 1, 0)
+                                    self.turn_phase = TurnPhase.MoveChip
+                                else:
+                                    # Move through all hands of current player
+                                    self.current_turn = (self.current_turn[0], self.current_turn[1] + 1)
+
+                                # Check if all hands have been gone through
+                    else:
+                        # It's the players turn!
+                        self.ctx.ui_state = UIState.Turn
+                        pass
+
+                # move the chip
+                # initiate the turn
+                # end the turn
+                # move the chip
+                # repeat
+
             case GamePhase.EndRound:
                 # Reset bets to 0
                 for player in self.players:
-                    player.round_bet = 0
+                    player.round_bets = [0]
             case _:
                 pass
 
@@ -336,6 +501,16 @@ class Table(State):
         for zone_name, rect in self.ctx.zones.items():
             if "hand" in zone_name:
                 pg.draw.rect(self.ctx.display, (80, 140, 60), rect)
+            # Coloured zones for debugging and figuring stuff out
+            # if "hand_bl" in zone_name:
+            #     pg.draw.rect(self.ctx.display, (255, 0, 0), rect)
+            # if "hand_br" in zone_name:
+            #     pg.draw.rect(self.ctx.display, (195, 0, 0), rect)
+            # if "hand_tl" in zone_name:
+            #     pg.draw.rect(self.ctx.display, (135, 0, 0), rect)
+            # if "hand_tr" in zone_name:
+            #     pg.draw.rect(self.ctx.display, (75, 0, 0), rect)
+
             if "stat" in zone_name:
                 pg.draw.rect(self.ctx.display, (80, 80, 80), rect)
             if "bet" in zone_name:
@@ -365,10 +540,50 @@ class Table(State):
                     # Dealer
                     continue
 
-                bet_text = self.stats_font.render(f"Bet: ${player.round_bet}", True, (255, 255, 255))
-                rect = self.ctx.zones[f"bet_{id}"]
-                text_pad = rect.height // 4
-                self.ctx.display.blit(bet_text, (rect.left + text_pad, rect.top + text_pad))
+                ####################################
+                # TODO: Refactor this duplicated code
+                bet_0 = player.round_bets[0]
+                bet_1 = player.round_bets[1]
+                bet_2 = player.round_bets[2]
+                bet_3 = player.round_bets[3]
+
+                bet_0_text = self.bet_font.render(
+                    "" if bet_0 == 0 else f"{'Double' if player.hands[0].is_doubled else 'Bet'} ${bet_0}",
+                    True,
+                    (255, 255, 255),
+                )
+                bet_1_text = self.bet_font.render(
+                    "" if bet_1 == 0 else f"{'Double' if player.hands[1].is_doubled else 'Bet'} ${bet_1}",
+                    True,
+                    (255, 255, 255),
+                )
+                bet_2_text = self.bet_font.render(
+                    "" if bet_2 == 0 else f"{'Double' if player.hands[2].is_doubled else 'Bet'} ${bet_2}",
+                    True,
+                    (255, 255, 255),
+                )
+                bet_3_text = self.bet_font.render(
+                    "" if bet_3 == 0 else f"{'Double' if player.hands[3].is_doubled else 'Bet'} ${bet_3}",
+                    True,
+                    (255, 255, 255),
+                )
+
+                left_zone = self.ctx.zones[f"hand_bl_{id}"]
+                right_zone = self.ctx.zones[f"hand_br_{id}"]
+                bet_rect = self.ctx.zones[f"bet_{id}"]
+                text_pad = bet_rect.height // 4
+
+                self.ctx.display.blit(bet_0_text, (left_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery))
+                self.ctx.display.blit(bet_1_text, (right_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery))
+                self.ctx.display.blit(
+                    bet_2_text,
+                    (left_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery - bet_2_text.get_height()),
+                )
+                self.ctx.display.blit(
+                    bet_3_text,
+                    (right_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery - bet_3_text.get_height()),
+                )
+                ####################################
 
         for player in self.players:
             # Draw stats text (name and balance)
