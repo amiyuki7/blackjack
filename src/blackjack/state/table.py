@@ -38,7 +38,8 @@ class Player:
         self.hands[hand_idx].cards.append(card)
 
     def allowed_to_potentially_split(self) -> bool:
-        return len(self.hands) < 4
+        """The player is only allowed to split if there is an empty hand available"""
+        return any(len(hand.cards) == 0 for hand in self.hands)
 
 
 class Bot(Player):
@@ -177,6 +178,12 @@ class Hand:
                 cum += 11
 
         return cum
+
+    def allowed_to_split(self) -> bool:
+        if len(self.cards) != 2:
+            return False
+        # Won't get IndexOutOfBounds error
+        return self.cards[0].value == self.cards[1].value
 
 
 class Deck:
