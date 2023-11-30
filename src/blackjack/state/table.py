@@ -76,6 +76,8 @@ class Bot(Player):
 
         if len(hand.cards) == 2 and hand.cards[0].value == hand.cards[1].value and hand.cards[0].value in [7, 8, -1]:
             logger.debug(f"Bot {id} Splitted!")
+            # All split hands will always have the same bet as the initial bet, thus subtract index 0
+            self.balance -= self.round_bets[0]
             return ActionType.Split
 
         if (
@@ -85,6 +87,7 @@ class Bot(Player):
         ):
             hand.is_done = True
             hand.is_doubled = True
+            self.balance -= self.round_bets[hand_idx]
             self.round_bets[hand_idx] *= 2
             logger.debug(f"Bot {id} Doubled!")
             return ActionType.Double
@@ -189,6 +192,13 @@ class Hand:
         return cum
 
     def get_word(self) -> str:
+        # Check for blackjack here because I forgot to put it elsewhere
+        value = self.calculate_value()
+        if value == 21 and len(self.cards) == 2:
+            self.is_blackjack = True
+
+        if self.is_blackjack:
+            return "B.J."
         if self.is_bust:
             return "Bust"
         if self.is_doubled:
@@ -543,10 +553,10 @@ class Table(State):
 
                                 zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
                                 self.movables.append(
-                                    Movable(top_card_1, dest=Vec2(zone[0] + 20, zone[1] + 10), speed=1000)
+                                    Movable(top_card_1, dest=Vec2(zone[0] + 20, zone[1] + 10), speed=1500)
                                 )
                                 self.movables.append(
-                                    Movable(top_card_2, dest=Vec2(new_zone[0] + 20, new_zone[1] + 10), speed=1000)
+                                    Movable(top_card_2, dest=Vec2(new_zone[0] + 20, new_zone[1] + 10), speed=1500)
                                 )
                             case ActionType.Stand:
                                 # Check if the next hand is available
@@ -567,7 +577,9 @@ class Table(State):
                         hand = target_player.hands[target_hand]
 
                         if hand.calculate_value() == 21:
-                            hand.is_blackjack = True
+                            if len(hand.cards) == 2:
+                                # 2 cards implies that there must be an Ace, thus a blackjack
+                                hand.is_blackjack = True
                             hand.is_done = True
                         elif hand.calculate_value() > 21:
                             hand.is_bust = True
@@ -615,6 +627,7 @@ class Table(State):
                                 case ActionType.Double:
                                     hand.is_doubled = True
                                     hand.is_done = True
+                                    target_player.balance -= target_player.round_bets[target_hand]
                                     target_player.round_bets[target_hand] *= 2
 
                                     top_card = self.deck.poptop()
@@ -643,6 +656,7 @@ class Table(State):
 
                                     free_hand_idx = target_player.hands.index(free_hand)
                                     target_player.round_bets[free_hand_idx] = target_player.round_bets[0]
+                                    target_player.balance -= target_player.round_bets[free_hand_idx]
                                     if free_hand_idx == 1:
                                         free_hand_zone = "br"
                                     elif free_hand_idx == 2:
@@ -776,11 +790,11 @@ class Table(State):
                 self.ctx.display.blit(bet_1_text, (right_zone.centerx - bet_1_text.get_width(), bet_rect.centery))
                 self.ctx.display.blit(
                     bet_2_text,
-                    (left_zone.centerx - bet_0_text.get_width() // 2, bet_rect.centery - bet_2_text.get_height()),
+                    (left_zone.centerx - bet_2_text.get_width() // 2, bet_rect.centery - bet_2_text.get_height()),
                 )
                 self.ctx.display.blit(
                     bet_3_text,
-                    (right_zone.centerx - bet_0_text.get_width(), bet_rect.centery - bet_3_text.get_height()),
+                    (right_zone.centerx - bet_3_text.get_width(), bet_rect.centery - bet_3_text.get_height()),
                 )
                 ####################################
 
