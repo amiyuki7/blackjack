@@ -389,6 +389,9 @@ class Table(State):
         return [player for player in self.players if condition(player)]
 
     def update(self) -> None:
+        if self.deck.is_exhausted():
+            self.deck.new_shuffled_deck()
+
         match self.game_phase:
             case GamePhase.Initial:
                 # Dummy phase for now, but implemented like this so it's easier to write any events
