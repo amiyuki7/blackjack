@@ -103,6 +103,10 @@ class App:
                 match self.ui_state:
                     case UIState.Turn:
                         [u.handle_mouse_hover(event) for u in self.ui_objects if type(u) == TurnButton]
+            if event.type == pg.MOUSEBUTTONDOWN:
+                match self.ui_state:
+                    case UIState.Turn:
+                        [u.handle_mouse_click(event) for u in self.ui_objects if type(u) == TurnButton]
 
         # Only update UI Objects during the correct UI State
         for obj in self.ui_objects:

@@ -4,7 +4,7 @@ from typing_extensions import override
 
 from loguru import logger
 
-from blackjack.ui.turn_buttons import ActionType
+from blackjack.ui.turn_buttons import ActionType, TurnButton
 
 if TYPE_CHECKING:
     from ..app import App
@@ -68,6 +68,10 @@ class Bot(Player):
         hand_value = hand.calculate_value()
         if hand_value == 0:
             # Empty hand should be "passed"
+            return ActionType.Stand
+
+        if hand_value > 21:
+            hand.is_bust = True
             return ActionType.Stand
 
         if (
@@ -147,6 +151,7 @@ class Hand:
         self.is_doubled = False
 
         self.is_blackjack = False
+        self.is_bust = False
         self.is_done = False
         """
         A hand is done if ONE of:
@@ -179,11 +184,22 @@ class Hand:
 
         return cum
 
+    def get_word(self) -> str:
+        if self.is_bust:
+            return "Bust"
+        if self.is_doubled:
+            return "Double"
+        return "Bet"
+
     def allowed_to_split(self) -> bool:
         if len(self.cards) != 2:
             return False
         # Won't get IndexOutOfBounds error
         return self.cards[0].value == self.cards[1].value
+
+    def allowed_to_double(self) -> bool:
+        # Only allowed to double on the initial deal
+        return len(self.cards) == 2
 
 
 class Deck:
@@ -418,12 +434,11 @@ class Table(State):
 
                     if type(target_player) == Bot:
                         action = target_player.decide(self.current_turn[1], dealer)
+                        target_hand = self.current_turn[1]
 
                         match action:
                             case ActionType.Hit:
                                 # TODO: Refactor out the drawing card code
-                                target_hand = self.current_turn[1]
-
                                 top_card = self.deck.poptop()
                                 top_card.pos = Vec2(*self.ctx.zones["deck"].topleft)
                                 target_player.add_card(self.current_turn[1], top_card)
@@ -445,8 +460,6 @@ class Table(State):
                                 pass
                             case ActionType.Double:
                                 # TODO: Refactor out the drawing card code
-                                target_hand = self.current_turn[1]
-
                                 top_card = self.deck.poptop()
                                 top_card.pos = Vec2(*self.ctx.zones["deck"].topleft)
                                 target_player.add_card(self.current_turn[1], top_card)
@@ -481,13 +494,65 @@ class Table(State):
                     else:
                         # It's the players turn!
                         self.ctx.ui_state = UIState.Turn
-                        pass
+                        target_hand = self.current_turn[1]
 
-                # move the chip
-                # initiate the turn
-                # end the turn
-                # move the chip
-                # repeat
+                        hand = target_player.hands[target_hand]
+
+                        if hand.calculate_value() > 21:
+                            hand.is_bust = True
+
+                        if hand.is_bust or len(hand.cards) == 0:
+                            if self.current_turn[1] == 3:
+                                # Pass the turn onto the dealer
+                                print("Dealers turn!")
+                                self.ctx.ui_state = UIState.Normal
+                            else:
+                                # Move to the next hand
+                                self.current_turn = (self.current_turn[0], self.current_turn[1] + 1)
+                            return
+
+                        turn_buttons = [u for u in self.ctx.ui_objects if type(u) == TurnButton]
+                        for button in turn_buttons:
+                            button.is_disabled = False
+                        action = [u.action_type for u in turn_buttons if u.is_clicked]
+                        if len(action) == 1:
+                            # The player has clicked a button! Disable all buttons until Movable animation is over
+                            for u in [u for u in self.ctx.ui_objects if type(u) == TurnButton]:
+                                u.is_disabled = True
+                                u.is_clicked = False
+
+                            match action[0]:
+                                case ActionType.Hit:
+                                    top_card = self.deck.poptop()
+                                    top_card.pos = Vec2(*self.ctx.zones["deck"].topleft)
+                                    target_player.add_card(self.current_turn[1], top_card)
+
+                                    if target_hand == 0:
+                                        hand_zone = "bl"
+                                    elif target_hand == 1:
+                                        hand_zone = "br"
+                                    elif target_hand == 2:
+                                        hand_zone = "tl"
+                                    else:
+                                        hand_zone = "tr"
+
+                                    zone = self.ctx.zones[f"hand_{hand_zone}_{target_player.id}"].topleft
+                                    x_offset = (len(target_player.hands[target_hand].cards) - 1) * 20
+                                    y_offset = (len(target_player.hands[target_hand].cards) - 1) * 10
+                                    zone = (zone[0] + x_offset, zone[1] + y_offset)
+                                    self.movables.append(Movable(top_card, dest=Vec2(zone[0], zone[1]), speed=2000))
+                                case ActionType.Double:
+                                    pass
+                                case ActionType.Split:
+                                    pass
+                                case ActionType.Stand:
+                                    # Pass the turn onto the dealer
+                                    if self.current_turn[1] == 3:
+                                        # pass the turn onto the dealer
+                                        self.ctx.ui_state = UIState.Normal
+                                    else:
+                                        # Move through all the other hands of the player
+                                        self.current_turn = (self.current_turn[0], self.current_turn[1] + 1)
 
             case GamePhase.EndRound:
                 # Reset bets to 0
@@ -555,24 +620,16 @@ class Table(State):
                 bet_3 = player.round_bets[3]
 
                 bet_0_text = self.bet_font.render(
-                    "" if bet_0 == 0 else f"{'Double' if player.hands[0].is_doubled else 'Bet'} ${bet_0}",
-                    True,
-                    (255, 255, 255),
+                    "" if bet_0 == 0 else f"{player.hands[0].get_word()} ${bet_0}", True, (255, 255, 255)
                 )
                 bet_1_text = self.bet_font.render(
-                    "" if bet_1 == 0 else f"{'Double' if player.hands[1].is_doubled else 'Bet'} ${bet_1}",
-                    True,
-                    (255, 255, 255),
+                    "" if bet_1 == 0 else f"{player.hands[1].get_word()} ${bet_1}", True, (255, 255, 255)
                 )
                 bet_2_text = self.bet_font.render(
-                    "" if bet_2 == 0 else f"{'Double' if player.hands[2].is_doubled else 'Bet'} ${bet_2}",
-                    True,
-                    (255, 255, 255),
+                    "" if bet_2 == 0 else f"{player.hands[2].get_word()} ${bet_2}", True, (255, 255, 255)
                 )
                 bet_3_text = self.bet_font.render(
-                    "" if bet_3 == 0 else f"{'Double' if player.hands[3].is_doubled else 'Bet'} ${bet_3}",
-                    True,
-                    (255, 255, 255),
+                    "" if bet_3 == 0 else f"{player.hands[3].get_word()} ${bet_3}", True, (255, 255, 255)
                 )
 
                 left_zone = self.ctx.zones[f"hand_bl_{id}"]

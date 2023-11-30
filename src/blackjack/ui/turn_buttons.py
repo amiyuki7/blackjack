@@ -47,6 +47,7 @@ class TurnButton(UIObject):
     def __init__(self, ctx: App, action_type: ActionType, target_state: UIState) -> None:
         self.is_disabled = False
         self.is_hovered = False
+        self.is_clicked = False
         self.action_type = action_type
 
         self.radius = ctx.display.get_width() // 24
@@ -73,20 +74,29 @@ class TurnButton(UIObject):
                 else ActionType.get_colour(self.action_type)
             )
 
+    def handle_mouse_click(self, event: pg.event.Event) -> None:
+        if self.colour == (255, 255, 255):
+            # Is hovered
+            self.is_clicked = True
+
     def update(self) -> None:
-        # If invalid, gray out the colour
         from blackjack.state.table import Table
 
         assert type(self.ctx.state) == Table
+
+        if self.is_disabled:
+            self.colour = (100, 100, 100)
 
         player_id, hand_idx = self.ctx.state.current_turn
         player = self.ctx.state.filter_players(lambda player: player.id == player_id)[0]
         target_hand = player.hands[hand_idx]
 
+        # If the action associated with the button is invalid, disable the button
         if self.action_type == ActionType.Split:
             if not (player.allowed_to_potentially_split() and target_hand.allowed_to_split()):
-                print("DISABLING SPLIT")
-                self.colour = (100, 100, 100)
+                self.is_disabled = True
+        elif self.action_type == ActionType.Double:
+            if not target_hand.allowed_to_double:
                 self.is_disabled = True
 
     def render(self) -> None:
